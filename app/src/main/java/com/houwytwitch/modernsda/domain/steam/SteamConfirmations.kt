@@ -33,11 +33,12 @@ class SteamConfirmations(
     suspend fun fetchConfirmations(
         steamId: Long,
         identitySecret: String,
+        deviceId: String,
         sessionId: String,
         steamLoginSecure: String,
     ): Result<List<Confirmation>> = runCatching {
         val time = getSteamTime()
-        val params = buildConfirmationParams(identitySecret, steamId, time, "conf")
+        val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, "conf")
         val cookie = buildCookieHeader(steamId, sessionId, steamLoginSecure)
 
         val request = Request.Builder()
@@ -74,6 +75,7 @@ class SteamConfirmations(
     suspend fun respondToConfirmation(
         steamId: Long,
         identitySecret: String,
+        deviceId: String,
         sessionId: String,
         steamLoginSecure: String,
         confirmation: Confirmation,
@@ -82,7 +84,7 @@ class SteamConfirmations(
         return try {
             val time = getSteamTime()
             val tag = if (accept) "allow" else "cancel"
-            val params = buildConfirmationParams(identitySecret, steamId, time, tag)
+            val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, tag)
             val cookie = buildCookieHeader(steamId, sessionId, steamLoginSecure)
 
             val url = "$MOBILECONF_URL/ajaxop?op=${if (accept) "allow" else "cancel"}" +
@@ -106,7 +108,7 @@ class SteamConfirmations(
                 ConfirmationResult.Error(result.message ?: "Action failed")
             }
         } catch (e: SessionExpiredException) {
-            ConfirmationResult.Error("Session expired. Please re-import your .mafile.")
+            throw e
         } catch (e: Exception) {
             ConfirmationResult.Error(e.message ?: "Unknown error")
         }
@@ -118,6 +120,7 @@ class SteamConfirmations(
     suspend fun acceptAllConfirmations(
         steamId: Long,
         identitySecret: String,
+        deviceId: String,
         sessionId: String,
         steamLoginSecure: String,
         confirmations: List<Confirmation>,
@@ -126,7 +129,7 @@ class SteamConfirmations(
 
         return try {
             val time = getSteamTime()
-            val params = buildConfirmationParams(identitySecret, steamId, time, "allow")
+            val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, "allow")
             val cookie = buildCookieHeader(steamId, sessionId, steamLoginSecure)
 
             val cidParams = confirmations.joinToString("&") { "cid[]=${it.id}" }
@@ -154,6 +157,7 @@ class SteamConfirmations(
 
     private fun buildConfirmationParams(
         identitySecret: String,
+        deviceId: String,
         steamId: Long,
         time: Long,
         tag: String,
@@ -174,7 +178,8 @@ class SteamConfirmations(
             .replace("/", "%2F")
             .replace("=", "%3D")
 
-        return "p=$b64hash&a=$steamId&k=$b64hash&t=$time&m=react&tag=$tag"
+        // p = device_id (fixed), k = HMAC confirmation key
+        return "p=$deviceId&a=$steamId&k=$b64hash&t=$time&m=react&tag=$tag"
     }
 
     private fun buildCookieHeader(steamId: Long, sessionId: String, steamLoginSecure: String): String {
