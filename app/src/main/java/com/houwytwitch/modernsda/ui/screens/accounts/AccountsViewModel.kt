@@ -149,10 +149,10 @@ class AccountsViewModel @Inject constructor(
         _uiState.update { it.copy(showEditAccountDialog = false, editingAccount = null) }
     }
 
-    fun addAccount(mafileJson: String) {
+    fun addAccount(mafileJson: String, password: String = "") {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = accountRepository.addAccountFromMafile(mafileJson)) {
+            when (val result = accountRepository.addAccountFromMafile(mafileJson, password)) {
                 is AddAccountResult.Success -> {
                     _uiState.update {
                         it.copy(
@@ -181,9 +181,9 @@ class AccountsViewModel @Inject constructor(
         }
     }
 
-    fun updateAccountProxy(account: Account, proxyUrl: String) {
+    fun updateAccount(account: Account, password: String, proxyUrl: String) {
         viewModelScope.launch {
-            accountRepository.updateAccount(account.copy(proxyUrl = proxyUrl))
+            accountRepository.updateAccount(account.copy(password = password, proxyUrl = proxyUrl))
             hideEditAccountDialog()
             _uiState.update { it.copy(snackbarMessage = "Account updated") }
         }

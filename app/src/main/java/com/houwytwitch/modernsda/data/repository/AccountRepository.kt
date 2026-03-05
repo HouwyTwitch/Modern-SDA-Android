@@ -22,7 +22,7 @@ class AccountRepository @Inject constructor(
 ) {
     val accounts: Flow<List<Account>> = accountDao.getAllAccounts()
 
-    suspend fun addAccountFromMafile(mafileJson: String): AddAccountResult {
+    suspend fun addAccountFromMafile(mafileJson: String, password: String = ""): AddAccountResult {
         return try {
             val mafile = gson.fromJson(mafileJson, MafileData::class.java)
                 ?: return AddAccountResult.Error("Invalid .mafile format")
@@ -57,6 +57,7 @@ class AccountRepository @Inject constructor(
                 sharedSecret = mafile.sharedSecret,
                 identitySecret = mafile.identitySecret,
                 deviceId = mafile.deviceId,
+                password = password,
                 sessionId = mafile.session?.sessionId ?: "",
                 steamLoginSecure = mafile.session?.steamLoginSecure ?: "",
                 webCookie = mafile.session?.webCookie ?: "",

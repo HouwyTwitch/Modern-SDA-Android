@@ -70,6 +70,7 @@ fun AccountsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
+    var pendingMafileJson by remember { mutableStateOf("") }
 
     // Notify parent of selected account changes
     LaunchedEffect(uiState.selectedAccount) {
@@ -86,7 +87,7 @@ fun AccountsScreen(
         }
     }
 
-    // File picker for .mafile import
+    // File picker for .mafile import — opens dialog to also collect password
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -95,7 +96,8 @@ fun AccountsScreen(
                 stream.bufferedReader().readText()
             }
             if (!json.isNullOrBlank()) {
-                viewModel.addAccount(json)
+                pendingMafileJson = json
+                viewModel.showAddAccountDialog()
             }
         }
     }
@@ -197,11 +199,18 @@ fun AccountsScreen(
         }
     }
 
-    // Add account dialog (text paste fallback)
+    // Add account dialog — used both for file picker (json pre-filled) and manual paste
     if (uiState.showAddAccountDialog) {
         AddAccountDialog(
-            onDismiss = viewModel::hideAddAccountDialog,
-            onConfirm = viewModel::addAccount,
+            initialJson = pendingMafileJson,
+            onDismiss = {
+                pendingMafileJson = ""
+                viewModel.hideAddAccountDialog()
+            },
+            onConfirm = { json, password ->
+                pendingMafileJson = ""
+                viewModel.addAccount(json, password)
+            },
             isLoading = uiState.isLoading,
             errorMessage = uiState.errorMessage,
             onClearError = viewModel::clearError,
@@ -214,7 +223,7 @@ fun AccountsScreen(
             EditAccountDialog(
                 account = account,
                 onDismiss = viewModel::hideEditAccountDialog,
-                onConfirm = { proxyUrl -> viewModel.updateAccountProxy(account, proxyUrl) },
+                onConfirm = { password, proxyUrl -> viewModel.updateAccount(account, password, proxyUrl) },
             )
         }
     }
