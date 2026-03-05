@@ -32,4 +32,7 @@ interface AccountDao {
 
     @Query("UPDATE accounts SET sessionId = :sessionId, steamLoginSecure = :steamLoginSecure, webCookie = :webCookie, oAuthToken = :oAuthToken WHERE steamId = :steamId")
     suspend fun updateSession(steamId: Long, sessionId: String, steamLoginSecure: String, webCookie: String, oAuthToken: String)
+
+    @Query("UPDATE accounts SET sessionId = :sessionId, steamLoginSecure = :steamLoginSecure, refreshToken = :refreshToken WHERE steamId = :steamId")
+    suspend fun updateSessionTokens(steamId: Long, sessionId: String, steamLoginSecure: String, refreshToken: String)
 }

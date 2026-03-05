@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.houwytwitch.modernsda.domain.steam.AvatarFetcher
 import com.houwytwitch.modernsda.domain.steam.SteamConfirmations
+import com.houwytwitch.modernsda.domain.steam.SteamLogin
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -49,4 +50,11 @@ object NetworkModule {
         okHttpClient: OkHttpClient,
         gson: Gson,
     ): SteamConfirmations = SteamConfirmations(okHttpClient, gson)
+
+    @Provides
+    @Singleton
+    fun provideSteamLogin(
+        okHttpClient: OkHttpClient,
+        gson: Gson,
+    ): SteamLogin = SteamLogin(okHttpClient, gson)
 }

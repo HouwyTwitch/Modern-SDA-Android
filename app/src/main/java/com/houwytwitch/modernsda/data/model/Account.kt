@@ -21,6 +21,7 @@ data class Account(
     val steamLoginSecure: String = "",
     val webCookie: String = "",
     val oAuthToken: String = "",
+    val refreshToken: String = "",
     val avatarUrl: String = "",
     val proxyUrl: String = "",
     val addedAt: Long = System.currentTimeMillis(),
