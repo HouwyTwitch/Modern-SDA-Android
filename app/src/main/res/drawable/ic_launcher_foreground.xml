@@ -4,40 +4,37 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Steam-style shield/lock icon -->
+
+    <!-- Shield outline (white) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,18 L30,28 L30,52 C30,66 40,78 54,82 C68,78 78,66 78,52 L78,28 Z" />
+        android:pathData="M54,20 L32,29 L32,52 C32,66 41,77 54,81 C67,77 76,66 76,52 L76,29 Z" />
+
+    <!-- Shield inner (blue fill) -->
     <path
         android:fillColor="#1B6CA8"
-        android:pathData="M54,24 L36,32 L36,52 C36,63 44,73 54,76 C64,73 72,63 72,52 L72,32 Z" />
-    <!-- Lock body -->
-    <rect
-        android:fillColor="#FFFFFF"
-        android:x="42"
-        android:y="50"
-        android:width="24"
-        android:height="18"
-        android:rx="3"
-        android:ry="3" />
-    <!-- Lock shackle -->
+        android:pathData="M54,26 L37,34 L37,52 C37,63 44,72 54,75 C64,72 71,63 71,52 L71,34 Z" />
+
+    <!-- Lock body (white rounded rect via path) -->
     <path
         android:fillColor="#FFFFFF"
+        android:pathData="M43,52 L65,52 Q68,52 68,55 L68,68 Q68,71 65,71 L43,71 Q40,71 40,68 L40,55 Q40,52 43,52 Z" />
+
+    <!-- Lock shackle (white arc) -->
+    <path
+        android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="4"
-        android:fillAlpha="0"
-        android:pathData="M46,50 L46,44 A8,8 0 0 1 62,44 L62,50" />
-    <!-- Keyhole -->
-    <circle
+        android:pathData="M46,52 L46,44 A8,8 0 0 1 62,44 L62,52" />
+
+    <!-- Keyhole circle (blue) -->
+    <path
         android:fillColor="#1B6CA8"
-        android:cx="54"
-        android:cy="58"
-        android:r="4" />
-    <rect
+        android:pathData="M54,58 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+
+    <!-- Keyhole stem (blue) -->
+    <path
         android:fillColor="#1B6CA8"
-        android:x="52"
-        android:y="58"
-        android:width="4"
-        android:height="6"
-        android:rx="1" />
+        android:pathData="M52,61 L52,67 Q52,68 54,68 Q56,68 56,67 L56,61 Z" />
+
 </vector>
