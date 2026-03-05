@@ -6,6 +6,7 @@ import com.google.gson.annotations.SerializedName
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import java.math.BigInteger
 import java.security.KeyFactory
 import java.security.spec.RSAPublicKeySpec
@@ -13,14 +14,14 @@ import javax.crypto.Cipher
 import kotlin.random.Random
 
 /**
- * Implements the Steam IAuthenticationService login flow.
+ * Implements the Steam IAuthenticationService login flow using JSON format.
  *
  * Steps:
- * 1. GetPasswordRSAPublicKey  – fetch RSA public key for password encryption
- * 2. BeginAuthSessionViaCredentials – start auth session (protobuf)
- * 3. UpdateAuthSessionWithSteamGuardCode – submit TOTP from shared_secret (protobuf)
- * 4. PollAuthSessionStatus – retrieve refresh_token + access_token (protobuf)
- * 5. Construct steamLoginSecure cookie value from steamId + access_token
+ * 1. GetPasswordRSAPublicKey  – fetch RSA public key (JSON)
+ * 2. BeginAuthSessionViaCredentials – start auth session (JSON)
+ * 3. UpdateAuthSessionWithSteamGuardCode – submit TOTP (JSON)
+ * 4. PollAuthSessionStatus – get refresh_token + access_token (JSON)
+ * 5. Construct steamLoginSecure from steamId + access_token
  */
 class SteamLogin(
     private val httpClient: OkHttpClient,
@@ -28,9 +29,8 @@ class SteamLogin(
 ) {
     companion object {
         private const val API_BASE = "https://api.steampowered.com/IAuthenticationService"
-        private const val LOGIN_BASE = "https://login.steampowered.com"
-        private const val POLL_INTERVAL_MS = 5_000L
-        private const val MAX_POLL_ATTEMPTS = 20
+        private const val POLL_INTERVAL_MS = 3_000L
+        private const val MAX_POLL_ATTEMPTS = 8
     }
 
     data class LoginResult(
@@ -41,10 +41,9 @@ class SteamLogin(
     )
 
     /**
-     * Full login flow. Returns [LoginResult] on success.
-     * @param sharedSecret Base64 shared_secret for TOTP generation.
+     * Full login flow. Throws on any failure with a descriptive message.
      */
-    suspend fun login(
+    fun login(
         accountName: String,
         password: String,
         sharedSecret: String,
@@ -56,66 +55,66 @@ class SteamLogin(
         // 2. Encrypt password
         val encryptedPassword = rsaEncryptPassword(password, rsaMod, rsaExp)
 
-        // 3. Begin auth session
-        val (clientId, requestId, _) = beginAuthSession(accountName, encryptedPassword, rsaTimestamp)
+        // 3. Begin auth session – returns clientId (string) and requestId (base64 string)
+        val (clientId, requestId) = beginAuthSession(accountName, encryptedPassword, rsaTimestamp)
 
-        // 4. Submit TOTP
+        // 4. Submit TOTP code generated from shared_secret
         val totpCode = SteamTotp.generateCode(sharedSecret)
-        submitSteamGuardCode(clientId, steamId, totpCode)
+        submitSteamGuardCode(clientId, steamId.toString(), totpCode)
 
-        // 5. Poll for tokens
+        // 5. Poll until tokens arrive (should be fast after TOTP submission)
         val (refreshToken, accessToken) = pollForTokens(clientId, requestId)
 
-        // 6. Construct session
         val sessionId = generateSessionId()
-        val steamLoginSecure = "$steamId||$accessToken"
-
         return LoginResult(
             sessionId = sessionId,
-            steamLoginSecure = steamLoginSecure,
+            steamLoginSecure = "$steamId||$accessToken",
             refreshToken = refreshToken,
             accessToken = accessToken,
         )
     }
 
     /**
-     * Uses the stored refresh_token to obtain a new access_token.
-     * Returns a new steamLoginSecure value.
+     * Exchanges a refresh_token for a new access_token via GenerateAccessTokenForApp.
+     * Returns new steamLoginSecure value.
      */
     fun refreshAccessToken(refreshToken: String, steamId: Long): String {
-        val body = FormBody.Builder()
-            .add("nonce", refreshToken)
-            .add("redir", "https://steamcommunity.com/login/home/?goto=")
+        val json = JSONObject().apply {
+            put("refresh_token", refreshToken)
+            put("steamid", steamId.toString())
+        }
+
+        val requestBody = FormBody.Builder()
+            .add("input_json", json.toString())
             .build()
 
         val request = Request.Builder()
-            .url("$LOGIN_BASE/jwt/refresh")
-            .post(body)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
+            .url("$API_BASE/GenerateAccessTokenForApp/v1?format=json")
+            .post(requestBody)
+            .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .build()
 
         val response = httpClient.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw Exception("Empty token refresh response")
+        val body = response.body?.string() ?: throw Exception("Empty token refresh response")
+        if (!response.isSuccessful) throw Exception("Token refresh failed: HTTP ${response.code}")
 
-        if (!response.isSuccessful) {
-            throw Exception("Token refresh failed: HTTP ${response.code}")
-        }
-
-        val refreshResponse = gson.fromJson(responseBody, TokenRefreshResponse::class.java)
-        val newAccessToken = refreshResponse.response?.accessToken
-            ?: throw Exception("No access_token in refresh response")
+        val root = JSONObject(body)
+        val resp = root.optJSONObject("response")
+            ?: throw Exception("Invalid token refresh response")
+        val newAccessToken = resp.optString("access_token", "")
+        if (newAccessToken.isBlank()) throw Exception("No access_token in refresh response")
 
         return "$steamId||$newAccessToken"
     }
 
-    // ── Step 1: RSA key ──────────────────────────────────────────────────────
+    // ── Step 1: RSA key ───────────────────────────────────────────────────────
 
     private data class RsaKey(val mod: String, val exp: String, val timestamp: Long)
 
     private fun getRsaKey(accountName: String): RsaKey {
         val request = Request.Builder()
-            .url("$API_BASE/GetPasswordRSAPublicKey/v1?account_name=$accountName")
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
+            .url("$API_BASE/GetPasswordRSAPublicKey/v1?format=json&account_name=${accountName.encodeUrl()}")
+            .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .get()
             .build()
 
@@ -123,166 +122,155 @@ class SteamLogin(
         val body = response.body?.string() ?: throw Exception("Empty RSA key response")
         if (!response.isSuccessful) throw Exception("RSA key fetch failed: HTTP ${response.code}")
 
-        val parsed = gson.fromJson(body, RsaKeyResponse::class.java)
-        val inner = parsed.response ?: throw Exception("Missing RSA key response body")
+        val root = JSONObject(body)
+        val resp = root.optJSONObject("response")
+            ?: throw Exception("Missing RSA key response")
 
         return RsaKey(
-            mod = inner.publickeyMod ?: throw Exception("Missing publickey_mod"),
-            exp = inner.publickeyExp ?: throw Exception("Missing publickey_exp"),
-            timestamp = inner.timestamp?.toLongOrNull() ?: 0L,
+            mod = resp.getString("publickey_mod"),
+            exp = resp.getString("publickey_exp"),
+            timestamp = resp.optString("timestamp", "0").toLongOrNull() ?: 0L,
         )
     }
 
-    // ── Step 2: RSA encrypt password ─────────────────────────────────────────
+    // ── Step 2: RSA encrypt password ──────────────────────────────────────────
 
     private fun rsaEncryptPassword(password: String, modHex: String, expHex: String): String {
         val modulus = BigInteger(modHex, 16)
         val exponent = BigInteger(expHex, 16)
         val keySpec = RSAPublicKeySpec(modulus, exponent)
-        val keyFactory = KeyFactory.getInstance("RSA")
-        val publicKey = keyFactory.generatePublic(keySpec)
-
+        val publicKey = KeyFactory.getInstance("RSA").generatePublic(keySpec)
         val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
         cipher.init(Cipher.ENCRYPT_MODE, publicKey)
-        val encrypted = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
-
-        return Base64.encodeToString(encrypted, Base64.NO_WRAP)
+        return Base64.encodeToString(cipher.doFinal(password.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
     }
 
     // ── Step 3: Begin auth session ────────────────────────────────────────────
 
-    private data class AuthSession(val clientId: Long, val requestId: ByteArray, val sessionSteamId: Long)
-
+    // Returns (clientId as string, requestId as base64 string)
     private fun beginAuthSession(
         accountName: String,
         encryptedPassword: String,
         rsaTimestamp: Long,
-    ): AuthSession {
-        // Build device_details embedded message
-        val deviceDetails = ProtoUtils.concat(
-            ProtoUtils.encodeString(1, "Android"),           // device_friendly_name
-            ProtoUtils.encodeVarintField(2, 3L),             // platform_type = MobileApp
-        )
-
-        // Build request message
-        val proto = ProtoUtils.concat(
-            ProtoUtils.encodeString(1, accountName),          // account_name
-            ProtoUtils.encodeString(2, encryptedPassword),    // encrypted_password
-            ProtoUtils.encodeVarintField(3, rsaTimestamp),    // encryption_timestamp
-            ProtoUtils.encodeVarintField(5, 1L),              // remember_login = true
-            ProtoUtils.encodeVarintField(8, 1L),              // persistence = persistent
-            ProtoUtils.encodeString(9, "Mobile"),             // website_id
-            ProtoUtils.encodeMessage(10, deviceDetails),      // device_details
-        )
-
-        val requestBody = FormBody.Builder()
-            .add("input_protobuf_encoded", Base64.encodeToString(proto, Base64.NO_WRAP))
-            .build()
-
-        val request = Request.Builder()
-            .url("$API_BASE/BeginAuthSessionViaCredentials/v1")
-            .post(requestBody)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .build()
-
-        val response = httpClient.newCall(request).execute()
-        val responseBytes = response.body?.bytes() ?: throw Exception("Empty BeginAuthSession response")
-        if (!response.isSuccessful) throw Exception("BeginAuthSession failed: HTTP ${response.code}")
-
-        // Parse protobuf response: client_id(1,uint64) request_id(2,bytes) steamid(5,uint64)
-        val reader = ProtoUtils.Reader(responseBytes)
-        var clientId = 0L
-        var requestId = ByteArray(0)
-        var sessionSteamId = 0L
-
-        while (reader.hasMore()) {
-            val (field, wire) = reader.nextTag() ?: break
-            when (field) {
-                1 -> clientId = reader.readVarint()      // client_id
-                2 -> requestId = reader.readBytes()      // request_id
-                5 -> sessionSteamId = reader.readVarint() // steamid
-                else -> reader.skip(wire)
-            }
+    ): Pair<String, String> {
+        val json = JSONObject().apply {
+            put("account_name", accountName)
+            put("encrypted_password", encryptedPassword)
+            put("encryption_timestamp", rsaTimestamp)
+            put("remember_login", true)
+            put("persistence", 1)   // k_ESessionPersistence_Persistent
+            put("website_id", "Mobile")
+            put("device_details", JSONObject().apply {
+                put("device_friendly_name", "Android Phone")
+                put("platform_type", 3)  // k_EAuthTokenPlatformType_MobileApp
+                put("os_type", -500)     // k_EOSType_AndroidUnknown
+                put("gaming_device_type", 528)
+            })
         }
 
-        if (clientId == 0L) throw Exception("Invalid BeginAuthSession response: missing client_id")
-        return AuthSession(clientId, requestId, sessionSteamId)
-    }
-
-    // ── Step 4: Submit Steam Guard TOTP code ──────────────────────────────────
-
-    private fun submitSteamGuardCode(clientId: Long, steamId: Long, code: String) {
-        val proto = ProtoUtils.concat(
-            ProtoUtils.encodeVarintField(1, clientId),     // client_id
-            ProtoUtils.encodeVarintField(2, steamId),      // steamid
-            ProtoUtils.encodeString(3, code),              // code
-            ProtoUtils.encodeVarintField(4, 3L),           // code_type = DeviceCode
-        )
-
         val requestBody = FormBody.Builder()
-            .add("input_protobuf_encoded", Base64.encodeToString(proto, Base64.NO_WRAP))
+            .add("input_json", json.toString())
             .build()
 
         val request = Request.Builder()
-            .url("$API_BASE/UpdateAuthSessionWithSteamGuardCode/v1")
+            .url("$API_BASE/BeginAuthSessionViaCredentials/v1?format=json")
             .post(requestBody)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
+            .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .build()
 
         val response = httpClient.newCall(request).execute()
-        // 400/401 means wrong code; anything else unexpected is an error
-        if (!response.isSuccessful && response.code != 400) {
-            throw Exception("SteamGuard code submission failed: HTTP ${response.code}")
+        val body = response.body?.string() ?: throw Exception("Empty BeginAuthSession response")
+
+        if (response.code == 401 || response.code == 403) {
+            throw Exception("Invalid credentials (HTTP ${response.code})")
+        }
+        if (!response.isSuccessful) {
+            throw Exception("BeginAuthSession failed: HTTP ${response.code} — $body")
+        }
+
+        val root = JSONObject(body)
+        val resp = root.optJSONObject("response")
+            ?: throw Exception("Invalid BeginAuthSession response: $body")
+
+        val clientId = resp.optString("client_id", "")
+        val requestId = resp.optString("request_id", "")
+
+        if (clientId.isBlank()) throw Exception("BeginAuthSession: missing client_id")
+        if (requestId.isBlank()) throw Exception("BeginAuthSession: missing request_id")
+
+        return Pair(clientId, requestId)
+    }
+
+    // ── Step 4: Submit TOTP ───────────────────────────────────────────────────
+
+    private fun submitSteamGuardCode(clientId: String, steamId: String, code: String) {
+        val json = JSONObject().apply {
+            put("client_id", clientId)
+            put("steamid", steamId)
+            put("code", code)
+            put("code_type", 3)  // k_EAuthSessionGuardType_DeviceCode
+        }
+
+        val requestBody = FormBody.Builder()
+            .add("input_json", json.toString())
+            .build()
+
+        val request = Request.Builder()
+            .url("$API_BASE/UpdateAuthSessionWithSteamGuardCode/v1?format=json")
+            .post(requestBody)
+            .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
+            .build()
+
+        val response = httpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+
+        // Steam returns 400 if the TOTP code is wrong / expired
+        if (response.code == 400) {
+            throw Exception("Two-factor code was rejected by Steam (possibly expired, try again)")
+        }
+        if (!response.isSuccessful) {
+            throw Exception("SteamGuard submission failed: HTTP ${response.code}")
         }
     }
 
     // ── Step 5: Poll for tokens ───────────────────────────────────────────────
 
-    private fun pollForTokens(clientId: Long, requestId: ByteArray): Pair<String, String> {
-        val proto = ProtoUtils.concat(
-            ProtoUtils.encodeVarintField(1, clientId),   // client_id
-            ProtoUtils.encodeBytes(2, requestId),        // request_id
-        )
-        val encodedProto = Base64.encodeToString(proto, Base64.NO_WRAP)
+    private fun pollForTokens(clientId: String, requestId: String): Pair<String, String> {
+        val json = JSONObject().apply {
+            put("client_id", clientId)
+            put("request_id", requestId)
+        }
+        val inputJson = json.toString()
 
-        repeat(MAX_POLL_ATTEMPTS) {
-            Thread.sleep(POLL_INTERVAL_MS)
+        repeat(MAX_POLL_ATTEMPTS) { attempt ->
+            if (attempt > 0) Thread.sleep(POLL_INTERVAL_MS)
 
             val requestBody = FormBody.Builder()
-                .add("input_protobuf_encoded", encodedProto)
+                .add("input_json", inputJson)
                 .build()
 
             val request = Request.Builder()
-                .url("$API_BASE/PollAuthSessionStatus/v1")
+                .url("$API_BASE/PollAuthSessionStatus/v1?format=json")
                 .post(requestBody)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
+                .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
                 .build()
 
             val response = httpClient.newCall(request).execute()
-            val responseBytes = response.body?.bytes() ?: return@repeat
+            val body = response.body?.string() ?: return@repeat
             if (!response.isSuccessful) return@repeat
 
-            // Parse: refresh_token(3,string) access_token(4,string)
-            val reader = ProtoUtils.Reader(responseBytes)
-            var refreshToken = ""
-            var accessToken = ""
+            val root = runCatching { JSONObject(body) }.getOrNull() ?: return@repeat
+            val resp = root.optJSONObject("response") ?: return@repeat
 
-            while (reader.hasMore()) {
-                val (field, wire) = reader.nextTag() ?: break
-                when (field) {
-                    3 -> refreshToken = reader.readString()   // refresh_token
-                    4 -> accessToken = reader.readString()    // access_token
-                    else -> reader.skip(wire)
-                }
-            }
+            val refreshToken = resp.optString("refresh_token", "")
+            val accessToken = resp.optString("access_token", "")
 
             if (refreshToken.isNotBlank() && accessToken.isNotBlank()) {
                 return Pair(refreshToken, accessToken)
             }
         }
 
-        throw Exception("Timed out waiting for Steam login confirmation")
+        throw Exception("Login timed out waiting for Steam to confirm authentication")
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -290,23 +278,6 @@ class SteamLogin(
     private fun generateSessionId(): String =
         (1..24).map { Random.nextInt(0, 16).toString(16) }.joinToString("")
 
-    // ── Response DTOs (JSON) ──────────────────────────────────────────────────
-
-    private data class RsaKeyResponse(
-        @SerializedName("response") val response: RsaKeyInner?,
-    )
-
-    private data class RsaKeyInner(
-        @SerializedName("publickey_mod") val publickeyMod: String?,
-        @SerializedName("publickey_exp") val publickeyExp: String?,
-        @SerializedName("timestamp") val timestamp: String?,
-    )
-
-    private data class TokenRefreshResponse(
-        @SerializedName("response") val response: TokenRefreshInner?,
-    )
-
-    private data class TokenRefreshInner(
-        @SerializedName("token") val accessToken: String?,
-    )
+    private fun String.encodeUrl(): String =
+        java.net.URLEncoder.encode(this, "UTF-8")
 }

@@ -21,168 +21,162 @@ class ConfirmationRepository @Inject constructor(
     private val accountDao: AccountDao,
 ) {
     suspend fun fetchConfirmations(account: Account): Result<List<Confirmation>> {
-        val resolved = ensureValidSession(account)
-            ?: return Result.failure(Exception("Could not authenticate. Add a password to your account to enable auto-login."))
+        return runCatching {
+            val resolved = ensureValidSession(account)
 
-        val result = steamConfirmations.fetchConfirmations(
-            steamId = resolved.steamId,
-            identitySecret = resolved.identitySecret,
-            deviceId = resolved.deviceId,
-            sessionId = resolved.sessionId,
-            steamLoginSecure = resolved.steamLoginSecure,
-        )
+            val result = steamConfirmations.fetchConfirmations(
+                steamId = resolved.steamId,
+                identitySecret = resolved.identitySecret,
+                deviceId = resolved.deviceId,
+                sessionId = resolved.sessionId,
+                steamLoginSecure = resolved.steamLoginSecure,
+            )
 
-        // If session expired mid-flight, try once more after re-auth
-        if (result.exceptionOrNull() is SessionExpiredException) {
-            val refreshed = reAuthenticate(resolved) ?: return Result.failure(
-                Exception("Session expired and re-authentication failed.")
-            )
-            return steamConfirmations.fetchConfirmations(
-                steamId = refreshed.steamId,
-                identitySecret = refreshed.identitySecret,
-                deviceId = refreshed.deviceId,
-                sessionId = refreshed.sessionId,
-                steamLoginSecure = refreshed.steamLoginSecure,
-            )
+            // If session expired mid-flight, re-auth and retry once
+            if (result.exceptionOrNull() is SessionExpiredException) {
+                val refreshed = reAuthenticate(resolved)
+                return@runCatching steamConfirmations.fetchConfirmations(
+                    steamId = refreshed.steamId,
+                    identitySecret = refreshed.identitySecret,
+                    deviceId = refreshed.deviceId,
+                    sessionId = refreshed.sessionId,
+                    steamLoginSecure = refreshed.steamLoginSecure,
+                ).getOrThrow()
+            }
+
+            result.getOrThrow()
         }
-
-        return result
     }
 
-    suspend fun acceptConfirmation(
-        account: Account,
-        confirmation: Confirmation,
-    ): ConfirmationResult {
-        val resolved = ensureValidSession(account) ?: return ConfirmationResult.Error(
-            "Could not authenticate. Add a password to your account to enable auto-login."
-        )
-        return steamConfirmations.respondToConfirmation(
-            steamId = resolved.steamId,
-            identitySecret = resolved.identitySecret,
-            deviceId = resolved.deviceId,
-            sessionId = resolved.sessionId,
-            steamLoginSecure = resolved.steamLoginSecure,
-            confirmation = confirmation,
-            accept = true,
-        )
+    suspend fun acceptConfirmation(account: Account, confirmation: Confirmation): ConfirmationResult {
+        return try {
+            val resolved = ensureValidSession(account)
+            steamConfirmations.respondToConfirmation(
+                steamId = resolved.steamId,
+                identitySecret = resolved.identitySecret,
+                deviceId = resolved.deviceId,
+                sessionId = resolved.sessionId,
+                steamLoginSecure = resolved.steamLoginSecure,
+                confirmation = confirmation,
+                accept = true,
+            )
+        } catch (e: Exception) {
+            ConfirmationResult.Error(e.message ?: "Failed to accept confirmation")
+        }
     }
 
-    suspend fun declineConfirmation(
-        account: Account,
-        confirmation: Confirmation,
-    ): ConfirmationResult {
-        val resolved = ensureValidSession(account) ?: return ConfirmationResult.Error(
-            "Could not authenticate. Add a password to your account to enable auto-login."
-        )
-        return steamConfirmations.respondToConfirmation(
-            steamId = resolved.steamId,
-            identitySecret = resolved.identitySecret,
-            deviceId = resolved.deviceId,
-            sessionId = resolved.sessionId,
-            steamLoginSecure = resolved.steamLoginSecure,
-            confirmation = confirmation,
-            accept = false,
-        )
+    suspend fun declineConfirmation(account: Account, confirmation: Confirmation): ConfirmationResult {
+        return try {
+            val resolved = ensureValidSession(account)
+            steamConfirmations.respondToConfirmation(
+                steamId = resolved.steamId,
+                identitySecret = resolved.identitySecret,
+                deviceId = resolved.deviceId,
+                sessionId = resolved.sessionId,
+                steamLoginSecure = resolved.steamLoginSecure,
+                confirmation = confirmation,
+                accept = false,
+            )
+        } catch (e: Exception) {
+            ConfirmationResult.Error(e.message ?: "Failed to decline confirmation")
+        }
     }
 
-    suspend fun acceptAllConfirmations(
-        account: Account,
-        confirmations: List<Confirmation>,
-    ): ConfirmationResult {
-        val resolved = ensureValidSession(account) ?: return ConfirmationResult.Error(
-            "Could not authenticate. Add a password to your account to enable auto-login."
-        )
-        return steamConfirmations.acceptAllConfirmations(
-            steamId = resolved.steamId,
-            identitySecret = resolved.identitySecret,
-            deviceId = resolved.deviceId,
-            sessionId = resolved.sessionId,
-            steamLoginSecure = resolved.steamLoginSecure,
-            confirmations = confirmations,
-        )
+    suspend fun acceptAllConfirmations(account: Account, confirmations: List<Confirmation>): ConfirmationResult {
+        return try {
+            val resolved = ensureValidSession(account)
+            steamConfirmations.acceptAllConfirmations(
+                steamId = resolved.steamId,
+                identitySecret = resolved.identitySecret,
+                deviceId = resolved.deviceId,
+                sessionId = resolved.sessionId,
+                steamLoginSecure = resolved.steamLoginSecure,
+                confirmations = confirmations,
+            )
+        } catch (e: Exception) {
+            ConfirmationResult.Error(e.message ?: "Failed to accept all confirmations")
+        }
     }
 
     // ── Session management ────────────────────────────────────────────────────
 
     /**
-     * Returns a valid account (possibly with refreshed tokens), or null if auth is impossible.
+     * Returns an account with valid session tokens, or throws with a descriptive message.
      *
      * Priority:
-     * 1. Existing steamLoginSecure with a non-expired access token → use as-is
-     * 2. Valid refreshToken → exchange for a new access token (fast path)
-     * 3. Password available → full login via IAuthenticationService
+     * 1. Existing steamLoginSecure with non-expired JWT → use as-is
+     * 2. Valid refreshToken → exchange for a new access_token
+     * 3. Password set → full login via IAuthenticationService
+     * 4. None of the above → throw explaining what to do
      */
-    private suspend fun ensureValidSession(account: Account): Account? {
-        // 1. Check existing session
+    private suspend fun ensureValidSession(account: Account): Account {
         if (account.steamLoginSecure.isNotBlank() && !isAccessTokenExpired(account.steamLoginSecure)) {
             return account
         }
 
-        // 2. Try token refresh
-        if (account.refreshToken.isNotBlank() && !isJwtExpired(account.refreshToken)) {
+        if (account.refreshToken.isNotBlank()) {
             return tryRefreshToken(account)
         }
 
-        // 3. Full login
         if (account.password.isNotBlank()) {
-            return tryFullLogin(account)
+            return performFullLogin(account)
         }
 
-        return null
+        throw Exception("No session available. Edit the account to add a password for auto-login.")
     }
 
-    private suspend fun reAuthenticate(account: Account): Account? {
-        if (account.refreshToken.isNotBlank() && !isJwtExpired(account.refreshToken)) {
+    private suspend fun reAuthenticate(account: Account): Account {
+        if (account.refreshToken.isNotBlank()) {
             return tryRefreshToken(account)
         }
         if (account.password.isNotBlank()) {
-            return tryFullLogin(account)
+            return performFullLogin(account)
         }
-        return null
+        throw Exception("Session expired and could not re-authenticate.")
     }
 
-    private suspend fun tryRefreshToken(account: Account): Account? = withContext(Dispatchers.IO) {
-        return@withContext try {
+    private suspend fun tryRefreshToken(account: Account): Account = withContext(Dispatchers.IO) {
+        try {
             val newSteamLoginSecure = steamLogin.refreshAccessToken(account.refreshToken, account.steamId)
-            accountDao.updateSessionTokens(
-                steamId = account.steamId,
-                sessionId = account.sessionId.ifBlank { generateSessionId() },
+            val sessionId = account.sessionId.ifBlank { generateSessionId() }
+            accountDao.updateSessionTokens(account.steamId, sessionId, newSteamLoginSecure, account.refreshToken)
+            accountDao.getAccountById(account.steamId) ?: account.copy(
+                sessionId = sessionId,
                 steamLoginSecure = newSteamLoginSecure,
-                refreshToken = account.refreshToken,
             )
-            accountDao.getAccountById(account.steamId)
         } catch (e: Exception) {
-            // Refresh token invalid/expired → fall through to full login
-            if (account.password.isNotBlank()) tryFullLogin(account) else null
+            // Refresh token invalid/expired – try full login if password is available
+            if (account.password.isNotBlank()) {
+                performFullLogin(account)
+            } else {
+                throw Exception("Session expired. Edit the account to add a password for auto-login.")
+            }
         }
     }
 
-    private suspend fun tryFullLogin(account: Account): Account? = withContext(Dispatchers.IO) {
-        return@withContext try {
-            val result = steamLogin.login(
-                accountName = account.accountName,
-                password = account.password,
-                sharedSecret = account.sharedSecret,
-                steamId = account.steamId,
-            )
-            accountDao.updateSessionTokens(
-                steamId = account.steamId,
-                sessionId = result.sessionId,
-                steamLoginSecure = result.steamLoginSecure,
-                refreshToken = result.refreshToken,
-            )
-            accountDao.getAccountById(account.steamId)
-        } catch (e: Exception) {
-            null
-        }
+    private suspend fun performFullLogin(account: Account): Account = withContext(Dispatchers.IO) {
+        // SteamLogin.login() throws with a descriptive message on any failure
+        val result = steamLogin.login(
+            accountName = account.accountName,
+            password = account.password,
+            sharedSecret = account.sharedSecret,
+            steamId = account.steamId,
+        )
+        accountDao.updateSessionTokens(
+            steamId = account.steamId,
+            sessionId = result.sessionId,
+            steamLoginSecure = result.steamLoginSecure,
+            refreshToken = result.refreshToken,
+        )
+        accountDao.getAccountById(account.steamId) ?: account.copy(
+            sessionId = result.sessionId,
+            steamLoginSecure = result.steamLoginSecure,
+            refreshToken = result.refreshToken,
+        )
     }
 
     // ── JWT helpers ───────────────────────────────────────────────────────────
 
-    /**
-     * Checks whether the JWT embedded in a steamLoginSecure value is expired.
-     * steamLoginSecure format: "<steamid>||<jwt>"
-     */
     private fun isAccessTokenExpired(steamLoginSecure: String): Boolean {
         val jwt = steamLoginSecure.substringAfter("||", missingDelimiterValue = "")
         if (jwt.isBlank()) return true
@@ -200,13 +194,14 @@ class ConfirmationRepository @Inject constructor(
             val json = JSONObject(String(payload, Charsets.UTF_8))
             val exp = json.optLong("exp", 0L)
             val now = System.currentTimeMillis() / 1000
-            // Treat token as expired 5 minutes early to avoid edge cases
-            exp == 0L || now >= exp - 300
+            exp == 0L || now >= exp - 300   // expire 5 min early to avoid edge cases
         } catch (e: Exception) {
             true
         }
     }
 
     private fun generateSessionId(): String =
-        (1..24).map { (0..15).random().toString(16) }.joinToString("")
+        (1..24).map { Random.nextInt(0, 16).toString(16) }.joinToString("")
 }
+
+private val Random = kotlin.random.Random
