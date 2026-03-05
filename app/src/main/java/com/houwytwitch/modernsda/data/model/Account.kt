@@ -16,6 +16,7 @@ data class Account(
     val sharedSecret: String,
     val identitySecret: String,
     val deviceId: String,
+    val password: String = "",
     val sessionId: String = "",
     val steamLoginSecure: String = "",
     val webCookie: String = "",

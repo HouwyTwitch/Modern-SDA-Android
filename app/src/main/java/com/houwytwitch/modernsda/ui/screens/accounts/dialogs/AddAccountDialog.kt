@@ -4,42 +4,40 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-/**
- * Fallback dialog to paste .mafile JSON content directly.
- * The primary flow uses the system file picker (FAB), but this
- * provides a text-paste alternative.
- */
 @Composable
 fun AddAccountDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
+    onConfirm: (mafileJson: String, password: String) -> Unit,
     isLoading: Boolean,
     errorMessage: String?,
     onClearError: () -> Unit,
+    initialJson: String = "",
     modifier: Modifier = Modifier,
 ) {
-    var jsonText by remember { mutableStateOf("") }
-
-    LaunchedEffect(errorMessage) {
-        if (errorMessage != null) {
-            // Error is shown in dialog — clear it when user modifies text
-        }
-    }
+    var jsonText by remember { mutableStateOf(initialJson) }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -47,7 +45,7 @@ fun AddAccountDialog(
         text = {
             Column {
                 Text(
-                    text = "Paste your .mafile content below, or use the + button to pick a file from storage.",
+                    text = "Pick a .mafile via the + button, or paste JSON below. The password is used to re-authenticate when your session expires.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -60,11 +58,31 @@ fun AddAccountDialog(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp),
+                        .height(120.dp),
                     placeholder = { Text("Paste .mafile JSON here…") },
                     isError = errorMessage != null,
                     supportingText = errorMessage?.let {
                         { Text(it, color = MaterialTheme.colorScheme.error) }
+                    },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Steam Password") },
+                    placeholder = { Text("Enter your Steam password") },
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None
+                                          else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff
+                                              else Icons.Outlined.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                            )
+                        }
                     },
                 )
             }
@@ -74,7 +92,7 @@ fun AddAccountDialog(
                 CircularProgressIndicator()
             } else {
                 TextButton(
-                    onClick = { onConfirm(jsonText.trim()) },
+                    onClick = { onConfirm(jsonText.trim(), password) },
                     enabled = jsonText.isNotBlank(),
                 ) {
                     Text("Add")
