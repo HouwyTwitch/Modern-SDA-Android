@@ -1,0 +1,6 @@
+-keep class com.houwytwitch.modernsda.data.model.** { *; }
+-keep class com.houwytwitch.modernsda.domain.steam.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn okhttp3.**
+-dontwarn okio.**
