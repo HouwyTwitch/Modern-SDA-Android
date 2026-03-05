@@ -30,7 +30,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,8 +39,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,7 +56,6 @@ import com.houwytwitch.modernsda.data.model.Confirmation
 import com.houwytwitch.modernsda.data.model.ConfirmationType
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfirmationsScreen(
     selectedAccount: Account?,
@@ -85,21 +81,6 @@ fun ConfirmationsScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Confirmations", style = MaterialTheme.typography.titleLarge) },
-                actions = {
-                    if (uiState.state is ConfirmationsState.Loaded) {
-                        IconButton(onClick = viewModel::loadConfirmations) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         AnimatedContent(
@@ -121,6 +102,7 @@ fun ConfirmationsScreen(
                     onAccept = viewModel::acceptConfirmation,
                     onDecline = viewModel::declineConfirmation,
                     onAcceptAll = viewModel::acceptAllConfirmations,
+                    onRefresh = viewModel::loadConfirmations,
                 )
                 is ConfirmationsState.Empty -> EmptyState(message = state.message)
                 is ConfirmationsState.Error -> ErrorState(
@@ -193,8 +175,21 @@ private fun LoadedState(
     onAccept: (Confirmation) -> Unit,
     onDecline: (Confirmation) -> Unit,
     onAcceptAll: () -> Unit,
+    onRefresh: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        // Refresh button row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
+            }
+        }
+
         // Accept All button
         if (confirmations.size > 1) {
             Button(
