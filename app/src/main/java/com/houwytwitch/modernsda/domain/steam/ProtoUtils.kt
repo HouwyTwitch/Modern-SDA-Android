@@ -34,6 +34,14 @@ object ProtoUtils {
     fun encodeVarintField(fieldNum: Int, value: Long): ByteArray =
         concat(tag(fieldNum, 0), encodeVarint(value))
 
+    /** Encode a fixed64 field (wire type 1): 8 bytes little-endian. Used for proto `fixed64` fields. */
+    fun encodeFixed64(fieldNum: Int, value: Long): ByteArray {
+        val bytes = ByteArray(8)
+        var v = value
+        for (i in 0..7) { bytes[i] = (v and 0xFF).toByte(); v = v ushr 8 }
+        return concat(tag(fieldNum, 1), bytes)
+    }
+
     fun encodeMessage(fieldNum: Int, content: ByteArray): ByteArray =
         encodeBytes(fieldNum, content)
 
