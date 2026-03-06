@@ -278,7 +278,7 @@ class SteamLogin(
             }.toString())
             .build()
 
-        repeat(MAX_POLL_ATTEMPTS) { attempt ->
+        for (attempt in 0 until MAX_POLL_ATTEMPTS) {
             if (attempt > 0) Thread.sleep(POLL_INTERVAL_MS)
 
             val request = Request.Builder()
@@ -334,7 +334,8 @@ class SteamLogin(
         // POST to each transfer URL — these set steamLoginSecure and other cookies
         for (i in 0 until transferInfo.length()) {
             val entry = transferInfo.getJSONObject(i)
-            val url = entry.optString("url", "").ifBlank { continue }
+            val url = entry.optString("url", "")
+            if (url.isBlank()) continue
             val params = entry.optJSONObject("params") ?: continue
 
             val formBuilder = FormBody.Builder()
