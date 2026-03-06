@@ -25,7 +25,9 @@ object SteamTotp {
      */
     fun generateCode(sharedSecret: String, timeOffsetSeconds: Long = 0L): String {
         return try {
-            val key = Base64.decode(sharedSecret, Base64.DEFAULT)
+            // Normalize: some mafiles use URL-safe base64 (- and _); convert to standard before decode
+            val normalized = sharedSecret.replace('-', '+').replace('_', '/')
+            val key = Base64.decode(normalized, Base64.DEFAULT)
             val timeStep = (System.currentTimeMillis() / 1000 + timeOffsetSeconds) / TIME_STEP
 
             val msg = ByteBuffer.allocate(8).putLong(timeStep).array()
