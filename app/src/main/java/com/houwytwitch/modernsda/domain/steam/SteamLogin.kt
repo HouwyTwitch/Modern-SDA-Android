@@ -2,9 +2,13 @@ package com.houwytwitch.modernsda.domain.steam
 
 import android.util.Base64
 import com.google.gson.Gson
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import org.json.JSONObject
 import java.math.BigInteger
 import java.security.KeyFactory
@@ -17,9 +21,10 @@ import kotlin.random.Random
  * This is the approach used by steampy and compatible SDA tools.
  *
  * Flow:
- *   1. GET getrsakey → RSA public key + timestamp
- *   2. RSA-encrypt password, generate TOTP code
- *   3. POST dologin → transfer_parameters.token_secure (JWT access token)
+ *   1. Sync time with Steam servers (fix clock drift on emulators)
+ *   2. GET getrsakey → RSA public key + timestamp (session cookies stored via cookie jar)
+ *   3. RSA-encrypt password, generate TOTP with synced time
+ *   4. POST dologin → transfer_parameters.token_secure (JWT access token)
  */
 class SteamLogin(
     private val httpClient: OkHttpClient,
@@ -27,6 +32,7 @@ class SteamLogin(
 ) {
     companion object {
         private const val COMMUNITY = "https://steamcommunity.com"
+        private const val STEAM_API = "https://api.steampowered.com"
     }
 
     data class LoginResult(
@@ -42,32 +48,63 @@ class SteamLogin(
         sharedSecret: String,
         steamId: Long,
     ): LoginResult {
-        val (rsaMod, rsaExp, rsaTimestamp) = getRsaKey(accountName)
-        val encryptedPassword = rsaEncryptPassword(password, rsaMod, rsaExp)
-        val totpCode = SteamTotp.generateCode(sharedSecret)
-        val sessionId = generateSessionId()
+        // Build a client with a cookie jar so session cookies flow through the login requests
+        val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
+        val loginClient = httpClient.newBuilder()
+            .cookieJar(object : CookieJar {
+                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                    cookieStore.getOrPut(url.host) { mutableListOf() }.apply {
+                        cookies.forEach { new -> removeAll { it.name == new.name }; add(new) }
+                    }
+                }
+                override fun loadForRequest(url: HttpUrl): List<Cookie> =
+                    cookieStore[url.host] ?: emptyList()
+            })
+            .build()
 
+        // Pre-seed mobile client cookies (required by Steam's mobile login)
+        listOf("mobileClientVersion" to "0 (3.0.0)", "mobileClient" to "android").forEach { (name, value) ->
+            cookieStore.getOrPut("steamcommunity.com") { mutableListOf() }.add(
+                Cookie.Builder().name(name).value(value).domain("steamcommunity.com").path("/").build()
+            )
+        }
+
+        // 1. Sync time with Steam to correct emulator clock drift
+        val timeOffset = fetchSteamTimeOffset(loginClient)
+
+        // 2. Get RSA key (this also lets Steam set a sessionid cookie via cookie jar)
+        val (rsaMod, rsaExp, rsaTimestamp) = getRsaKey(accountName, loginClient)
+
+        // 3. Encrypt password + generate TOTP with server-synced time
+        val encryptedPassword = rsaEncryptPassword(password, rsaMod, rsaExp)
+        val totpCode = SteamTotp.generateCode(sharedSecret, timeOffsetSeconds = timeOffset)
+
+        // 4. Login via dologin
         val (tokenSecure, serverSteamId) = doLogin(
             accountName = accountName,
             encryptedPassword = encryptedPassword,
             rsaTimestamp = rsaTimestamp,
             totpCode = totpCode,
-            sessionId = sessionId,
             steamId = steamId,
+            client = loginClient,
         )
+
+        // Use Steam's sessionid from cookie jar if available, otherwise generate one
+        val sessionId = cookieStore["steamcommunity.com"]
+            ?.find { it.name == "sessionid" }?.value
+            ?: generateSessionId()
 
         val actualSteamId = serverSteamId.takeIf { it != 0L } ?: steamId
         return LoginResult(
             sessionId = sessionId,
             steamLoginSecure = "$actualSteamId||$tokenSecure",
-            refreshToken = "",   // dologin doesn't provide a separate refresh token
+            refreshToken = "",
             accessToken = tokenSecure,
         )
     }
 
     /**
      * Exchange a refresh_token (from a previous IAuthenticationService login) for a new access token.
-     * Only called if account.refreshToken is non-blank from a prior session.
      */
     fun refreshAccessToken(refreshToken: String, steamId: Long): String {
         val requestBody = FormBody.Builder()
@@ -78,7 +115,7 @@ class SteamLogin(
             .build()
 
         val request = Request.Builder()
-            .url("https://api.steampowered.com/IAuthenticationService/GenerateAccessTokenForApp/v1?format=json")
+            .url("$STEAM_API/IAuthenticationService/GenerateAccessTokenForApp/v1?format=json")
             .post(requestBody)
             .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .build()
@@ -90,25 +127,42 @@ class SteamLogin(
         val newAccessToken = JSONObject(body)
             .optJSONObject("response")
             ?.optString("access_token", "")
-            ?: throw Exception("Invalid token refresh response: $body")
+            .takeIf { !it.isNullOrBlank() }
+            ?: throw Exception("No access_token in refresh response: $body")
 
-        if (newAccessToken.isBlank()) throw Exception("No access_token in refresh response: $body")
         return "$steamId||$newAccessToken"
+    }
+
+    // ── Step 0: Sync time ─────────────────────────────────────────────────────
+
+    private fun fetchSteamTimeOffset(client: OkHttpClient): Long {
+        return try {
+            val request = Request.Builder()
+                .url("$STEAM_API/ITwoFactorService/QueryTime/v0001")
+                .post(RequestBody.create(null, ByteArray(0)))
+                .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
+                .build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return 0L
+            val serverTime = JSONObject(body).optJSONObject("response")?.optLong("server_time", 0L) ?: 0L
+            if (serverTime == 0L) 0L else serverTime - (System.currentTimeMillis() / 1000)
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     // ── Step 1: RSA public key ────────────────────────────────────────────────
 
     private data class RsaKey(val mod: String, val exp: String, val timestamp: Long)
 
-    private fun getRsaKey(accountName: String): RsaKey {
+    private fun getRsaKey(accountName: String, client: OkHttpClient): RsaKey {
         val request = Request.Builder()
             .url("$COMMUNITY/login/getrsakey/?username=${accountName.encodeUrl()}&donotcache=${System.currentTimeMillis()}")
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36")
-            .header("Cookie", "mobileClientVersion=0 (3.0.0); mobileClient=android")
             .get()
             .build()
 
-        val response = httpClient.newCall(request).execute()
+        val response = client.newCall(request).execute()
         val body = response.body?.string() ?: throw Exception("Empty RSA key response")
         if (!response.isSuccessful) throw Exception("RSA key fetch failed: HTTP ${response.code}")
 
@@ -140,8 +194,8 @@ class SteamLogin(
         encryptedPassword: String,
         rsaTimestamp: Long,
         totpCode: String,
-        sessionId: String,
         steamId: Long,
+        client: OkHttpClient,
     ): Pair<String, Long> {
         val requestBody = FormBody.Builder()
             .add("username", accountName)
@@ -166,17 +220,13 @@ class SteamLogin(
                 "Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
             )
             .header(
-                "Cookie",
-                "sessionid=$sessionId; mobileClientVersion=0 (3.0.0); mobileClient=android",
-            )
-            .header(
                 "Referer",
                 "$COMMUNITY/mobilelogin?oauth_client_id=DE45CD61&oauth_scope=read_profile%20write_profile%20read_client%20write_client",
             )
             .header("X-Requested-With", "com.valvesoftware.android.steam.community")
             .build()
 
-        val response = httpClient.newCall(request).execute()
+        val response = client.newCall(request).execute()
         val body = response.body?.string() ?: throw Exception("Empty dologin response")
         if (!response.isSuccessful) throw Exception("dologin HTTP ${response.code}: $body")
 
@@ -188,7 +238,9 @@ class SteamLogin(
                 json.optBoolean("emailauth_needed", false) ->
                     throw Exception("Steam requires email confirmation. Check your email and try again.")
                 json.optBoolean("captcha_needed", false) ->
-                    throw Exception("Steam requires CAPTCHA. Try again in a few minutes.")
+                    throw Exception("Steam requires CAPTCHA. Please try again in a few minutes.")
+                json.optBoolean("requires_twofactor", false) ->
+                    throw Exception("Steam rejected the authenticator code. Check device clock sync and try again.")
                 message.isNotBlank() -> throw Exception("Steam login failed: $message")
                 else -> throw Exception("Steam login failed (success=false): $body")
             }
