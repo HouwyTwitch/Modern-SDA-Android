@@ -249,14 +249,16 @@ class SteamLogin(
     // ── Step 5: Submit TOTP (plain form fields — crab713/steampy approach) ───
 
     private fun submitGuardCode(clientId: String, steamId: Long, code: String, client: OkHttpClient) {
+        val json = JSONObject().apply {
+            put("client_id", clientId)
+            put("steamid", steamId.toString())
+            put("code_type", 3)   // integer, not string
+            put("code", code)
+        }
+
         val request = Request.Builder()
             .url("$API_BASE/IAuthenticationService/UpdateAuthSessionWithSteamGuardCode/v1?format=json")
-            .post(FormBody.Builder()
-                .add("client_id", clientId)
-                .add("steamid", steamId.toString())
-                .add("code_type", "3")
-                .add("code", code)
-                .build())
+            .post(FormBody.Builder().add("input_json", json.toString()).build())
             .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .header("Referer", "$COMMUNITY/")
             .header("Origin", COMMUNITY)
