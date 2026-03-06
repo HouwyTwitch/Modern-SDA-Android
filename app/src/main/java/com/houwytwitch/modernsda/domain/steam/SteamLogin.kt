@@ -202,9 +202,9 @@ class SteamLogin(
 
         val proto = ProtoUtils.concat(
             ProtoUtils.encodeVarintField(1, clientIdLong),   // client_id (uint64)
-            ProtoUtils.encodeVarintField(2, steamId),        // steamid (uint64)
+            ProtoUtils.encodeFixed64(2, steamId),            // steamid (fixed64 — wire type 1)
             ProtoUtils.encodeString(3, code),                // code
-            ProtoUtils.encodeVarintField(4, 3L),             // code_type = DeviceCode
+            ProtoUtils.encodeVarintField(4, 3L),             // code_type = DeviceCode (3)
         )
 
         val requestBody = FormBody.Builder()
