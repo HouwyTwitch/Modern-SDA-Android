@@ -9,6 +9,7 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.math.BigInteger
 import java.net.URLDecoder
@@ -176,7 +177,7 @@ class SteamLogin(
         return try {
             val request = Request.Builder()
                 .url("$API_BASE/ITwoFactorService/QueryTime/v0001")
-                .post(RequestBody.create(null, ByteArray(0)))
+                .post(ByteArray(0).toRequestBody(null))
                 .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
                 .build()
             val response = httpClient.newCall(request).execute()
@@ -338,20 +339,29 @@ class SteamLogin(
         return parseBeginAuthResponse(bodyBytes)
     }
 
-    // ── Step 6: Submit TOTP (plain form fields — aiosteampy approach) ─────────
+    // ── Step 6: Submit TOTP (protobuf-encoded) ───────────────────────────────
     //
-    // aiosteampy sends raw form fields, NOT wrapped in input_json.
-    // https://github.com/somespecialone/aiosteampy/blob/master/aiosteampy/mixins/login.py
+    // CAuthentication_UpdateAuthSessionWithSteamGuardCode_Request proto fields:
+    //   1  uint64  client_id
+    //   2  uint64  steamid
+    //   3  string  code
+    //   4  int32   code_type  (3 = Device/TOTP)
+
+    private fun buildUpdateAuthProto(clientId: Long, steamId: Long, code: String): ByteArray =
+        ProtoUtils.concat(
+            ProtoUtils.encodeVarintField(1, clientId),
+            ProtoUtils.encodeVarintField(2, steamId),
+            ProtoUtils.encodeString(3, code),
+            ProtoUtils.encodeVarintField(4, 3L),  // k_EAuthSessionGuardType_DeviceCode (TOTP)
+        )
 
     private fun submitGuardCode(clientId: Long, steamId: Long, code: String, client: OkHttpClient) {
+        val protoBytes = buildUpdateAuthProto(clientId, steamId, code)
+        val encoded = Base64.encodeToString(protoBytes, Base64.NO_WRAP)
+
         val request = Request.Builder()
             .url("$API_BASE/IAuthenticationService/UpdateAuthSessionWithSteamGuardCode/v1")
-            .post(FormBody.Builder()
-                .add("client_id", clientId.toString())
-                .add("steamid", steamId.toString())
-                .add("code_type", "3")
-                .add("code", code)
-                .build())
+            .post(FormBody.Builder().add("input_protobuf_encoded", encoded).build())
             .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .header("Referer", "$COMMUNITY/")
             .header("Origin", COMMUNITY)
