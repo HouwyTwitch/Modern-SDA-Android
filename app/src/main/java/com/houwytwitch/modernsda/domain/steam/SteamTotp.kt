@@ -47,7 +47,7 @@ object SteamTotp {
             buildString {
                 var remaining = fullCode
                 repeat(CODE_LENGTH) {
-                    insert(0, STEAM_ALPHABET[remaining % STEAM_ALPHABET.length])
+                    append(STEAM_ALPHABET[remaining % STEAM_ALPHABET.length])
                     remaining /= STEAM_ALPHABET.length
                 }
             }
