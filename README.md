@@ -3,6 +3,8 @@
 A native Android Steam Authenticator app built with Jetpack Compose. Manage multiple Steam accounts, generate TOTP codes, and approve/decline trade and market confirmations — all from your phone.
 
 <img width="320" alt="Screenshot_20260311_135759" src="https://github.com/user-attachments/assets/a47a915e-0368-4941-94d8-faaa87cabcae" /><img width="320" alt="Screenshot_20260311_135759" src="https://github.com/user-attachments/assets/f73a4895-8bdb-4a46-9b41-e470bd704d61" /><img width="320" alt="Screenshot_20260311_135808" src="https://github.com/user-attachments/assets/fc6c2a10-560e-405b-9d18-c481ab5f8b9d" />
+
+
 <img width="320" alt="Screenshot_20260311_135816" src="https://github.com/user-attachments/assets/db69f2e1-fffc-4240-81d8-2be7029eac63" /><img width="320" alt="Screenshot_20260311_135832" src="https://github.com/user-attachments/assets/fa2a3ff8-895b-4b0c-81d1-b9d0ac655271" /><img width="320" alt="Screenshot_20260311_135838" src="https://github.com/user-attachments/assets/84c90d70-ec5d-4b56-b2db-cb68da55a08a" />
 
 ## Features
