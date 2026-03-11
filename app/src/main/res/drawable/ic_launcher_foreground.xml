@@ -4,37 +4,133 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Shield outline (white) -->
+    <!-- Rounded square background -->
+    <path
+        android:fillColor="#0D1B2A"
+        android:pathData="M18,6
+                          H90
+                          A12,12 0 0 1 102,18
+                          V90
+                          A12,12 0 0 1 90,102
+                          H18
+                          A12,12 0 0 1 6,90
+                          V18
+                          A12,12 0 0 1 18,6 Z"/>
+    <!-- Soft inner panel -->
+    <path
+        android:fillColor="#1B2838"
+        android:fillAlpha="0.92"
+        android:pathData="M20,10
+                          H88
+                          A10,10 0 0 1 98,20
+                          V88
+                          A10,10 0 0 1 88,98
+                          H20
+                          A10,10 0 0 1 10,88
+                          V20
+                          A10,10 0 0 1 20,10 Z"/>
+    <!-- Shield outer glow -->
+    <path
+        android:fillColor="#66C0F4"
+        android:fillAlpha="0.18"
+        android:pathData="M54,18
+                          C65,25 75,28 84,30
+                          V46
+                          C84,67 72,82 54,92
+                          C36,82 24,67 24,46
+                          V30
+                          C33,28 43,25 54,18 Z"/>
+    <!-- Shield body -->
+    <path
+        android:fillColor="#66C0F4"
+        android:pathData="M54,22
+                          C63.5,28 71.8,30.8 79,32.5
+                          V46
+                          C79,63.5 69.2,76.7 54,85.5
+                          C38.8,76.7 29,63.5 29,46
+                          V32.5
+                          C36.2,30.8 44.5,28 54,22 Z"/>
+    <!-- Shield inner shadow / depth -->
+    <path
+        android:fillColor="#1B2838"
+        android:fillAlpha="0.22"
+        android:pathData="M54,27
+                          C61.2,31.4 67.8,33.6 74,35
+                          V46
+                          C74,60.2 66.1,71.1 54,78.4
+                          C41.9,71.1 34,60.2 34,46
+                          V35
+                          C40.2,33.6 46.8,31.4 54,27 Z"/>
+    <!-- Shield edge highlight -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,20 L32,29 L32,52 C32,66 41,77 54,81 C67,77 76,66 76,52 L76,29 Z" />
-
-    <!-- Shield inner (blue fill) -->
-    <path
-        android:fillColor="#1B6CA8"
-        android:pathData="M54,26 L37,34 L37,52 C37,63 44,72 54,75 C64,72 71,63 71,52 L71,34 Z" />
-
-    <!-- Lock body (white rounded rect via path) -->
+        android:fillAlpha="0.16"
+        android:pathData="M54,24
+                          C62.4,29.1 69.9,31.4 76.8,33
+                          V37
+                          C69.4,35.1 61.7,32.5 54,27.8
+                          C46.3,32.5 38.6,35.1 31.2,37
+                          V33
+                          C38.1,31.4 45.6,29.1 54,24 Z"/>
+    <!-- Lock body -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M43,52 L65,52 Q68,52 68,55 L68,68 Q68,71 65,71 L43,71 Q40,71 40,68 L40,55 Q40,52 43,52 Z" />
-
-    <!-- Lock shackle (white arc) -->
+        android:pathData="M43,49
+                          H65
+                          A4,4 0 0 1 69,53
+                          V67
+                          A4,4 0 0 1 65,71
+                          H43
+                          A4,4 0 0 1 39,67
+                          V53
+                          A4,4 0 0 1 43,49 Z"/>
+    <!-- Lock shackle -->
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:pathData="M46,52 L46,44 A8,8 0 0 1 62,44 L62,52" />
-
-    <!-- Keyhole circle (blue) -->
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,49
+                          V43
+                          C46,38 49.8,34 54,34
+                          C58.2,34 62,38 62,43
+                          V49
+                          H58
+                          V43
+                          C58,40.1 56.2,38 54,38
+                          C51.8,38 50,40.1 50,43
+                          V49 Z"/>
+    <!-- Keyhole -->
     <path
-        android:fillColor="#1B6CA8"
-        android:pathData="M54,58 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
-
-    <!-- Keyhole stem (blue) -->
+        android:fillColor="#1B2838"
+        android:pathData="M54,55
+                          A3.2,3.2 0 1 1 53.99,55 Z"/>
     <path
-        android:fillColor="#1B6CA8"
-        android:pathData="M52,61 L52,67 Q52,68 54,68 Q56,68 56,67 L56,61 Z" />
-
+        android:fillColor="#1B2838"
+        android:pathData="M52.8,58
+                          H55.2
+                          V63.8
+                          H52.8 Z"/>
+    <!-- Steam / vapor wisps -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.18"
+        android:pathData="M40,18
+                          C37,14 38,10 42,8
+                          C39,12 42,15 44,18
+                          C46,21 45,25 42,27
+                          C44,23 43,21 40,18 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.16"
+        android:pathData="M53,14
+                          C50,10 51,6 55,4
+                          C52,8 55,11 57,14
+                          C59,17 58,21 55,23
+                          C57,19 56,17 53,14 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.14"
+        android:pathData="M66,18
+                          C63,14 64,10 68,8
+                          C65,12 68,15 70,18
+                          C72,21 71,25 68,27
+                          C70,23 69,21 66,18 Z"/>
 </vector>
