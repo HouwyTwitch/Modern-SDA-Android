@@ -6,6 +6,8 @@ import com.google.gson.annotations.SerializedName
 import com.houwytwitch.modernsda.data.model.Confirmation
 import com.houwytwitch.modernsda.data.model.ConfirmationResult
 import com.houwytwitch.modernsda.data.model.ConfirmationType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.nio.ByteBuffer
@@ -36,7 +38,7 @@ class SteamConfirmations(
         deviceId: String,
         sessionId: String,
         steamLoginSecure: String,
-    ): Result<List<Confirmation>> = runCatching {
+    ): Result<List<Confirmation>> = withContext(Dispatchers.IO) { runCatching {
         val time = getSteamTime()
         val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, "conf")
         val cookie = buildCookieHeader(steamId, sessionId, steamLoginSecure)
@@ -67,7 +69,7 @@ class SteamConfirmations(
         }
 
         confirmationResponse.conf?.map { it.toDomain() } ?: emptyList()
-    }
+    } }
 
     /**
      * Accept or decline a single confirmation.
@@ -80,8 +82,8 @@ class SteamConfirmations(
         steamLoginSecure: String,
         confirmation: Confirmation,
         accept: Boolean,
-    ): ConfirmationResult {
-        return try {
+    ): ConfirmationResult = withContext(Dispatchers.IO) {
+        try {
             val time = getSteamTime()
             val tag = if (accept) "allow" else "cancel"
             val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, tag)
@@ -99,7 +101,7 @@ class SteamConfirmations(
                 .build()
 
             val response = httpClient.newCall(request).execute()
-            val body = response.body?.string() ?: return ConfirmationResult.Error("Empty response")
+            val body = response.body?.string() ?: throw Exception("Empty response")
 
             val result = gson.fromJson(body, ConfirmationActionResponse::class.java)
             if (result.success) {
@@ -127,31 +129,33 @@ class SteamConfirmations(
     ): ConfirmationResult {
         if (confirmations.isEmpty()) return ConfirmationResult.Success
 
-        return try {
-            val time = getSteamTime()
-            val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, "allow")
-            val cookie = buildCookieHeader(steamId, sessionId, steamLoginSecure)
+        return withContext(Dispatchers.IO) {
+            try {
+                val time = getSteamTime()
+                val params = buildConfirmationParams(identitySecret, deviceId, steamId, time, "allow")
+                val cookie = buildCookieHeader(steamId, sessionId, steamLoginSecure)
 
-            val cidParams = confirmations.joinToString("&") { "cid[]=${it.id}" }
-            val ckParams = confirmations.joinToString("&") { "ck[]=${it.nonce}" }
+                val cidParams = confirmations.joinToString("&") { "cid[]=${it.id}" }
+                val ckParams = confirmations.joinToString("&") { "ck[]=${it.nonce}" }
 
-            val url = "$MOBILECONF_URL/multiajaxop?op=allow&$params&$cidParams&$ckParams"
+                val url = "$MOBILECONF_URL/multiajaxop?op=allow&$params&$cidParams&$ckParams"
 
-            val request = Request.Builder()
-                .url(url)
-                .header("Cookie", cookie)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 6 Pro) AppleWebKit/537.36")
-                .get()
-                .build()
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Cookie", cookie)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 6 Pro) AppleWebKit/537.36")
+                    .get()
+                    .build()
 
-            val response = httpClient.newCall(request).execute()
-            val body = response.body?.string() ?: return ConfirmationResult.Error("Empty response")
-            val result = gson.fromJson(body, ConfirmationActionResponse::class.java)
+                val response = httpClient.newCall(request).execute()
+                val body = response.body?.string() ?: throw Exception("Empty response")
+                val result = gson.fromJson(body, ConfirmationActionResponse::class.java)
 
-            if (result.success) ConfirmationResult.Success
-            else ConfirmationResult.Error(result.message ?: "Failed")
-        } catch (e: Exception) {
-            ConfirmationResult.Error(e.message ?: "Unknown error")
+                if (result.success) ConfirmationResult.Success
+                else ConfirmationResult.Error(result.message ?: "Failed")
+            } catch (e: Exception) {
+                ConfirmationResult.Error(e.message ?: "Unknown error")
+            }
         }
     }
 
