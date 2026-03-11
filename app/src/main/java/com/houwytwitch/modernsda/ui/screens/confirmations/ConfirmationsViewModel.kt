@@ -28,6 +28,7 @@ data class ConfirmationsUiState(
     val selectedAccount: Account? = null,
     val processingIds: Set<String> = emptySet(),
     val snackbarMessage: String? = null,
+    val isRefreshing: Boolean = false,
 )
 
 @HiltViewModel
@@ -51,10 +52,8 @@ class ConfirmationsViewModel @Inject constructor(
         val account = _uiState.value.selectedAccount ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(state = ConfirmationsState.Loading) }
-            Log.d("ConfirmationsVM", "[loadConfirmations] fetching for ${account.accountName}")
             confirmationRepository.fetchConfirmations(account).fold(
                 onSuccess = { confirmations ->
-                    Log.d("ConfirmationsVM", "[loadConfirmations] success count=${confirmations.size}")
                     _uiState.update {
                         it.copy(
                             state = if (confirmations.isEmpty()) {
@@ -66,9 +65,39 @@ class ConfirmationsViewModel @Inject constructor(
                     }
                 },
                 onFailure = { error ->
-                    Log.e("ConfirmationsVM", "[loadConfirmations] failure: ${error.message}", error)
+                    Log.e("ConfirmationsVM", "loadConfirmations failed", error)
                     _uiState.update {
                         it.copy(state = ConfirmationsState.Error(error.message ?: "Failed to load confirmations"))
+                    }
+                },
+            )
+        }
+    }
+
+    fun refreshConfirmations() {
+        val account = _uiState.value.selectedAccount ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            confirmationRepository.fetchConfirmations(account).fold(
+                onSuccess = { confirmations ->
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            state = if (confirmations.isEmpty()) {
+                                ConfirmationsState.Empty()
+                            } else {
+                                ConfirmationsState.Loaded(confirmations)
+                            },
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    Log.e("ConfirmationsVM", "refreshConfirmations failed", error)
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            snackbarMessage = error.message ?: "Refresh failed",
+                        )
                     }
                 },
             )

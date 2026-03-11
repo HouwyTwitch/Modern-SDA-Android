@@ -1,7 +1,6 @@
 package com.houwytwitch.modernsda.domain.steam
 
 import android.util.Base64
-import android.util.Log
 import com.google.gson.Gson
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -37,7 +36,6 @@ class SteamLogin(
     private val gson: Gson,
 ) {
     companion object {
-        private const val TAG = "SteamLogin"
         private const val API_BASE = "https://api.steampowered.com"
         private const val LOGIN_BASE = "https://login.steampowered.com"
         private const val COMMUNITY = "https://steamcommunity.com"
@@ -91,7 +89,6 @@ class SteamLogin(
         // 4. Encrypt password + TOTP
         val encryptedPassword = rsaEncryptPassword(password, rsaMod, rsaExp)
         val totpCode = SteamTotp.generateCode(sharedSecret, timeOffsetSeconds = timeOffset)
-        Log.d(TAG, "[Login] timeOffset=${timeOffset}s totpCode=$totpCode rsaTimestamp=${rsaTimestamp}")
 
         // 5. Begin auth session via protobuf-encoded request
         val (clientId, serverSteamId, requestIdBytes) = beginAuthSession(
@@ -101,7 +98,6 @@ class SteamLogin(
             client = loginClient,
         )
         val actualSteamId = serverSteamId.takeIf { it != 0L } ?: steamId
-        Log.d(TAG, "[Login] clientId=$clientId steamId=$actualSteamId requestId=${Base64.encodeToString(requestIdBytes, Base64.NO_WRAP)}")
 
         // 6. Submit TOTP
         submitGuardCode(clientId, actualSteamId, totpCode, loginClient)
@@ -176,10 +172,8 @@ class SteamLogin(
                 .post(ByteArray(0).toRequestBody(null))
                 .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
                 .build()
-            Log.d(TAG, "[QueryTime] POST ${request.url} (empty body)")
             val response = httpClient.newCall(request).execute()
             val body = response.body?.string() ?: return 0L
-            Log.d(TAG, "[QueryTime] ${response.code} body=$body")
             val serverTime = JSONObject(body).optJSONObject("response")?.optLong("server_time", 0L) ?: 0L
             if (serverTime == 0L) 0L else serverTime - (System.currentTimeMillis() / 1000)
         } catch (_: Exception) { 0L }
@@ -197,10 +191,8 @@ class SteamLogin(
             .get()
             .build()
 
-        Log.d(TAG, "[GetRSAKey] GET ${request.url}")
         val response = httpClient.newCall(request).execute()
         val body = response.body?.string() ?: throw Exception("Empty RSA key response")
-        Log.d(TAG, "[GetRSAKey] ${response.code} body=$body")
         if (!response.isSuccessful) throw Exception("RSA key fetch failed: HTTP ${response.code}")
 
         val resp = JSONObject(body).optJSONObject("response")
@@ -311,11 +303,9 @@ class SteamLogin(
             .header("Origin", COMMUNITY)
             .build()
 
-        Log.d(TAG, "[BeginAuth] POST ${request.url} payload_b64=$encoded")
         val response = client.newCall(request).execute()
         val contentType = response.header("Content-Type") ?: ""
         val bodyBytes = response.body?.bytes() ?: throw Exception("Empty BeginAuthSession response")
-        Log.d(TAG, "[BeginAuth] ${response.code} content-type=$contentType bytes=${bodyBytes.size} hex=${bodyBytes.toHex()}")
 
         if (response.code == 401 || response.code == 403) {
             throw Exception("Invalid credentials (HTTP ${response.code})")
@@ -364,12 +354,8 @@ class SteamLogin(
             .header("Referer", "$COMMUNITY/")
             .build()
 
-        Log.d(TAG, "[UpdateAuth] POST ${request.url} client_id=$clientId steamid=$steamId code=$code code_type=3")
         val response = client.newCall(request).execute()
-        val contentType = response.header("Content-Type") ?: ""
-        val bodyBytes = response.body?.bytes() ?: ByteArray(0)
-        val body = bodyBytes.decodeToString()
-        Log.d(TAG, "[UpdateAuth] ${response.code} content-type=$contentType bytes=${bodyBytes.size} hex=${bodyBytes.toHex()} body=$body")
+        val body = response.body?.string() ?: ""
         if (response.code == 400) throw Exception("Steam rejected the authenticator code (wrong code or expired). Response: $body")
         if (!response.isSuccessful) throw Exception("UpdateAuthSession failed: HTTP ${response.code} — $body")
     }
@@ -419,8 +405,6 @@ class SteamLogin(
             .add("input_protobuf_encoded", encoded)
             .build()
 
-        Log.d(TAG, "[Poll] payload_b64=$encoded raw_proto=${protoBytes.toHex()} requestId_b64=${Base64.encodeToString(requestId, Base64.NO_WRAP)}")
-
         for (attempt in 0 until MAX_POLL_ATTEMPTS) {
             if (attempt > 0) Thread.sleep(POLL_INTERVAL_MS)
 
@@ -435,13 +419,10 @@ class SteamLogin(
             val response = client.newCall(request).execute()
             val contentType = response.header("Content-Type") ?: ""
             val bodyBytes = response.body?.bytes() ?: continue
-            Log.d(TAG, "[Poll#$attempt] ${response.code} content-type=$contentType bytes=${bodyBytes.size} hex=${bodyBytes.toHex()}")
 
             if (!response.isSuccessful) continue
 
             val (refreshToken, accessToken) = if (contentType.contains("application/json")) {
-                // JSON fallback
-                Log.d(TAG, "[Poll#$attempt] JSON body=${bodyBytes.decodeToString()}")
                 val resp = JSONObject(bodyBytes.decodeToString()).optJSONObject("response") ?: continue
                 Pair(
                     resp.optString("refresh_token", ""),
@@ -451,8 +432,6 @@ class SteamLogin(
                 // Protobuf response
                 parsePollResponse(bodyBytes)
             }
-
-            Log.d(TAG, "[Poll#$attempt] refreshToken=${refreshToken.take(20).ifEmpty { "<empty>" }} accessToken=${accessToken.take(20).ifEmpty { "<empty>" }}")
 
             if (refreshToken.isNotBlank()) {
                 return Pair(refreshToken, accessToken)

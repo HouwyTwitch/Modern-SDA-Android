@@ -41,6 +41,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -91,7 +92,7 @@ dependencies {
 
     // Network
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
+    debugImplementation(libs.okhttp.logging)
     implementation(libs.gson)
 
     // Image loading
