@@ -1,5 +1,6 @@
 package com.houwytwitch.modernsda.ui.screens.confirmations
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.houwytwitch.modernsda.data.model.Account
@@ -50,8 +51,10 @@ class ConfirmationsViewModel @Inject constructor(
         val account = _uiState.value.selectedAccount ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(state = ConfirmationsState.Loading) }
+            Log.d("ConfirmationsVM", "[loadConfirmations] fetching for ${account.accountName}")
             confirmationRepository.fetchConfirmations(account).fold(
                 onSuccess = { confirmations ->
+                    Log.d("ConfirmationsVM", "[loadConfirmations] success count=${confirmations.size}")
                     _uiState.update {
                         it.copy(
                             state = if (confirmations.isEmpty()) {
@@ -63,6 +66,7 @@ class ConfirmationsViewModel @Inject constructor(
                     }
                 },
                 onFailure = { error ->
+                    Log.e("ConfirmationsVM", "[loadConfirmations] failure: ${error.message}", error)
                     _uiState.update {
                         it.copy(state = ConfirmationsState.Error(error.message ?: "Failed to load confirmations"))
                     }
