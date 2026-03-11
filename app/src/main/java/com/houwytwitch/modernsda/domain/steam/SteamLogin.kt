@@ -135,31 +135,23 @@ class SteamLogin(
     }
 
     /**
-     * Exchange a stored refresh_token for a new access_token.
+     * Exchange a stored refresh_token for a fresh steamLoginSecure cookie value.
+     *
+     * Uses the same finalizelogin + settoken flow as the full login, so the
+     * returned value is a proper web-community token (not a mobile-app token
+     * from GenerateAccessTokenForApp which doesn't work for steamcommunity.com).
      */
     fun refreshAccessToken(refreshToken: String, steamId: Long): String {
-        val requestBody = FormBody.Builder()
-            .add("input_json", JSONObject().apply {
-                put("refresh_token", refreshToken)
-                put("steamid", steamId.toString())
-            }.toString())
-            .build()
+        val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
+        val client = buildCookieClient(cookieStore)
+        val sessionId = generateSessionId()
 
-        val request = Request.Builder()
-            .url("$API_BASE/IAuthenticationService/GenerateAccessTokenForApp/v1?format=json")
-            .post(requestBody)
-            .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
-            .build()
+        finalizeLogin(refreshToken, sessionId, client)
 
-        val response = httpClient.newCall(request).execute()
-        val body = response.body?.string() ?: throw Exception("Empty token refresh response")
-        if (!response.isSuccessful) throw Exception("Token refresh failed: HTTP ${response.code}")
-
-        val newToken = JSONObject(body).optJSONObject("response")?.optString("access_token", "")
-            .takeIf { !it.isNullOrBlank() }
-            ?: throw Exception("No access_token in refresh response: $body")
-
-        return "$steamId||$newToken"
+        return cookieStore["steamcommunity.com"]
+            ?.find { it.name == "steamLoginSecure" }?.value
+            ?.let { URLDecoder.decode(it, "UTF-8") }
+            ?: throw Exception("Token refresh failed: no steamLoginSecure cookie after finalizelogin")
     }
 
     // ── Step 1: Init session ──────────────────────────────────────────────────
