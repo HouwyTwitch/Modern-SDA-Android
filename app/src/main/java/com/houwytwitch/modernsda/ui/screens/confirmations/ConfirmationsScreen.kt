@@ -8,6 +8,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -150,6 +152,7 @@ private fun EmptyState(message: String, isRefreshing: Boolean, onRefresh: () -> 
         CenteredIconMessage(
             icon = { Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(72.dp)) },
             message = message,
+            modifier = Modifier.verticalScroll(rememberScrollState()),
         )
     }
 }
@@ -337,8 +340,9 @@ private fun ConfirmationTypeBadge(type: ConfirmationType) {
 private fun CenteredIconMessage(
     icon: @Composable () -> Unit,
     message: String,
+    modifier: Modifier = Modifier,
 ) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxSize().then(modifier), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(24.dp),
