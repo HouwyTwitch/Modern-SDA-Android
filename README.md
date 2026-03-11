@@ -96,44 +96,6 @@ apksigner sign \
   app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-## Installing on a Pixel 6 Pro (API 36 / Android 16)
-
-### Enable developer options and USB debugging
-
-1. **Settings → About phone → Build number** — tap 7 times
-2. **Settings → System → Developer options → USB debugging** — enable
-
-### Install via ADB
-
-Connect your Pixel 6 Pro via USB, then:
-
-```bash
-# Verify the device is detected
-adb devices
-
-# Install the debug APK
-adb install app/build/outputs/apk/debug/app-debug.apk
-
-# Or install a release APK
-adb install app/build/outputs/apk/release/app-release-unsigned.apk
-```
-
-### Install via Android Studio
-
-1. Connect your Pixel 6 Pro
-2. In Android Studio, select your device in the toolbar
-3. Click **Run** (▶) — it builds and installs automatically
-
-### Wireless debugging (Android 11+)
-
-1. **Settings → System → Developer options → Wireless debugging** — enable
-2. **Pair device** — note the IP:port shown
-3. ```bash
-   adb pair <IP>:<PORT>   # enter the pairing code shown on screen
-   adb connect <IP>:5555  # connect
-   adb install app-debug.apk
-   ```
-
 ## Importing your accounts
 
 Modern SDA uses the standard `.mafile` format exported by the original [Steam Desktop Authenticator](https://github.com/Jessecar96/SteamDesktopAuthenticator).
