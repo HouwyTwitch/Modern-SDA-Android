@@ -252,7 +252,7 @@ class SteamLogin(
      *   8  string  website_id
      *   9  message device_details
      *     1  string  device_friendly_name
-     *     2  enum    platform_type  (2 = WebBrowser)
+     *     2  enum    platform_type  (3 = MobileApp)
      *   11 uint32  additional_field
      */
     private fun buildBeginAuthProto(
@@ -262,7 +262,7 @@ class SteamLogin(
     ): ByteArray {
         val deviceDetails = ProtoUtils.concat(
             ProtoUtils.encodeString(1, "Modern SDA Android"),
-            ProtoUtils.encodeVarintField(2, 2L),  // k_EAuthTokenPlatformType_WebBrowser
+            ProtoUtils.encodeVarintField(2, 3L),  // k_EAuthTokenPlatformType_MobileApp
         )
         return ProtoUtils.concat(
             ProtoUtils.encodeString(2, accountName),
@@ -270,7 +270,7 @@ class SteamLogin(
             ProtoUtils.encodeVarintField(4, rsaTimestamp),
             ProtoUtils.encodeVarintField(5, 1L),   // remember_login
             ProtoUtils.encodeVarintField(7, 1L),   // persistence
-            ProtoUtils.encodeString(8, "Community"),
+            ProtoUtils.encodeString(8, "Mobile"),
             ProtoUtils.encodeMessage(9, deviceDetails),
             ProtoUtils.encodeVarintField(11, 8L),  // additional_field required by Steam
         )
