@@ -243,17 +243,17 @@ class SteamLogin(
     /**
      * Encode CAuthentication_BeginAuthSessionViaCredentials_Request as protobuf.
      *
-     * Proto field map (from aiosteampy/auth_pb2.py):
+     * Field map matches aiosteampy auth_pb2.py exactly:
      *   2  string  account_name
      *   3  string  encrypted_password
      *   4  uint64  encryption_timestamp
      *   5  uint32  remember_login
      *   7  uint32  persistence
-     *   8  string  website_id
+     *   8  string  website_id          ("Community")
      *   9  message device_details
      *     1  string  device_friendly_name
      *     2  enum    platform_type  (2 = WebBrowser)
-     *   11 uint32  additional_field
+     *   11 uint32  additional_field    (8)
      */
     private fun buildBeginAuthProto(
         accountName: String,
@@ -272,7 +272,7 @@ class SteamLogin(
             ProtoUtils.encodeVarintField(7, 1L),   // persistence
             ProtoUtils.encodeString(8, "Community"),
             ProtoUtils.encodeMessage(9, deviceDetails),
-            ProtoUtils.encodeVarintField(11, 8L),  // additional_field required by Steam
+            ProtoUtils.encodeVarintField(11, 8L),  // additional_field
         )
     }
 
@@ -349,35 +349,30 @@ class SteamLogin(
         return parseBeginAuthResponse(bodyBytes)
     }
 
-    // ── Step 6: Submit TOTP (protobuf-encoded) ───────────────────────────────
+    // ── Step 6: Submit TOTP (raw form fields, same as aiosteampy) ────────────
     //
-    // CAuthentication_UpdateAuthSessionWithSteamGuardCode_Request proto fields:
-    //   1  uint64  client_id
-    //   2  uint64  steamid
-    //   3  string  code
-    //   4  int32   code_type  (3 = Device/TOTP)
-
-    private fun buildUpdateAuthProto(clientId: Long, steamId: Long, code: String): ByteArray =
-        ProtoUtils.concat(
-            ProtoUtils.encodeVarintField(1, clientId),
-            ProtoUtils.encodeVarintField(2, steamId),
-            ProtoUtils.encodeString(3, code),
-            ProtoUtils.encodeVarintField(4, 3L),  // k_EAuthSessionGuardType_DeviceCode (TOTP)
-        )
+    // aiosteampy sends plain form fields — NOT input_protobuf_encoded:
+    //   client_id  string  (integer as string)
+    //   steamid    string  (integer as string)
+    //   code_type  int     3 = k_EAuthSessionGuardType_DeviceCode
+    //   code       string  TOTP code
 
     private fun submitGuardCode(clientId: Long, steamId: Long, code: String, client: OkHttpClient) {
-        val protoBytes = buildUpdateAuthProto(clientId, steamId, code)
-        val encoded = Base64.encodeToString(protoBytes, Base64.NO_WRAP)
+        val formBody = FormBody.Builder()
+            .add("client_id", clientId.toString())
+            .add("steamid", steamId.toString())
+            .add("code_type", "3")
+            .add("code", code)
+            .build()
 
         val request = Request.Builder()
             .url("$API_BASE/IAuthenticationService/UpdateAuthSessionWithSteamGuardCode/v1")
-            .post(FormBody.Builder().add("input_protobuf_encoded", encoded).build())
+            .post(formBody)
             .header("User-Agent", "Dalvik/2.1.0 (Linux; Android 14)")
             .header("Referer", "$COMMUNITY/")
-            .header("Origin", COMMUNITY)
             .build()
 
-        Log.d(TAG, "[UpdateAuth] POST ${request.url} code=$code code_type=3 payload_b64=$encoded raw_proto=${protoBytes.toHex()}")
+        Log.d(TAG, "[UpdateAuth] POST ${request.url} client_id=$clientId steamid=$steamId code=$code code_type=3")
         val response = client.newCall(request).execute()
         val contentType = response.header("Content-Type") ?: ""
         val bodyBytes = response.body?.bytes() ?: ByteArray(0)
