@@ -1,6 +1,7 @@
 package com.houwytwitch.modernsda.domain.steam
 
 import android.util.Base64
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.houwytwitch.modernsda.data.model.Confirmation
@@ -25,6 +26,7 @@ class SteamConfirmations(
     private val gson: Gson,
 ) {
     companion object {
+        private const val TAG = "SteamConf"
         private const val BASE_URL = "https://steamcommunity.com"
         private const val MOBILECONF_URL = "$BASE_URL/mobileconf"
     }
@@ -53,19 +55,21 @@ class SteamConfirmations(
 
         val response = httpClient.newCall(request).execute()
         val body = response.body?.string() ?: throw Exception("Empty response")
+        Log.d(TAG, "[getlist] ${response.code} body=${body.take(500)}")
 
         if (!response.isSuccessful) {
             throw Exception("HTTP ${response.code}: $body")
         }
 
         val confirmationResponse = gson.fromJson(body, ConfirmationListResponse::class.java)
+        Log.d(TAG, "[getlist] success=${confirmationResponse.success} needsAuth=${confirmationResponse.needsAuth} conf.size=${confirmationResponse.conf?.size}")
 
         if (!confirmationResponse.success) {
             // Session may have expired
             if (confirmationResponse.needsAuth == true) {
                 throw SessionExpiredException("Session expired for account $steamId")
             }
-            throw Exception("Failed to fetch confirmations")
+            throw Exception("Failed to fetch confirmations: $body")
         }
 
         confirmationResponse.conf?.map { it.toDomain() } ?: emptyList()
