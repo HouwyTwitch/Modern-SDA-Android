@@ -30,15 +30,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -99,12 +100,17 @@ fun ConfirmationsScreen(
                 is ConfirmationsState.Loaded -> LoadedState(
                     confirmations = state.confirmations,
                     processingIds = uiState.processingIds,
+                    isRefreshing = uiState.isRefreshing,
                     onAccept = viewModel::acceptConfirmation,
                     onDecline = viewModel::declineConfirmation,
                     onAcceptAll = viewModel::acceptAllConfirmations,
-                    onRefresh = viewModel::loadConfirmations,
+                    onRefresh = viewModel::refreshConfirmations,
                 )
-                is ConfirmationsState.Empty -> EmptyState(message = state.message)
+                is ConfirmationsState.Empty -> EmptyState(
+                    message = state.message,
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = viewModel::refreshConfirmations,
+                )
                 is ConfirmationsState.Error -> ErrorState(
                     message = state.message,
                     onRetry = viewModel::loadConfirmations,
@@ -133,12 +139,19 @@ private fun LoadingState() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EmptyState(message: String) {
-    CenteredIconMessage(
-        icon = { Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(72.dp)) },
-        message = message,
-    )
+private fun EmptyState(message: String, isRefreshing: Boolean, onRefresh: () -> Unit) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        CenteredIconMessage(
+            icon = { Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(72.dp)) },
+            message = message,
+        )
+    }
 }
 
 @Composable
@@ -168,56 +181,52 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LoadedState(
     confirmations: List<Confirmation>,
     processingIds: Set<String>,
+    isRefreshing: Boolean,
     onAccept: (Confirmation) -> Unit,
     onDecline: (Confirmation) -> Unit,
     onAcceptAll: () -> Unit,
     onRefresh: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Refresh button row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            IconButton(onClick = onRefresh) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Accept All button
+            if (confirmations.size > 1) {
+                Button(
+                    onClick = onAcceptAll,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(Icons.Outlined.DoneAll, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Accept All (${confirmations.size})")
+                }
             }
-        }
 
-        // Accept All button
-        if (confirmations.size > 1) {
-            Button(
-                onClick = onAcceptAll,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                ),
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Outlined.DoneAll, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Accept All (${confirmations.size})")
-            }
-        }
-
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(confirmations, key = { it.id }) { confirmation ->
-                ConfirmationCard(
-                    confirmation = confirmation,
-                    isProcessing = confirmation.id in processingIds,
-                    onAccept = { onAccept(confirmation) },
-                    onDecline = { onDecline(confirmation) },
-                )
+                items(confirmations, key = { it.id }) { confirmation ->
+                    ConfirmationCard(
+                        confirmation = confirmation,
+                        isProcessing = confirmation.id in processingIds,
+                        onAccept = { onAccept(confirmation) },
+                        onDecline = { onDecline(confirmation) },
+                    )
+                }
             }
         }
     }
