@@ -68,8 +68,9 @@ fun AccountsScreen(
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
     var pendingMafileJson by remember { mutableStateOf("") }
 
-    // Notify parent of selected account changes
-    LaunchedEffect(uiState.selectedAccount) {
+    // Notify parent when the selected account changes (key on steamId only so that
+    // token refreshes don't re-trigger loadConfirmations in the Confirmations screen)
+    LaunchedEffect(uiState.selectedAccount?.steamId) {
         onAccountSelected(uiState.selectedAccount)
     }
 
