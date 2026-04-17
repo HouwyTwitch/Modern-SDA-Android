@@ -137,10 +137,20 @@ private fun AppLockDialog(
     var pinInput by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var biometricAttempted by remember { mutableStateOf(false) }
-    val canUseBiometric = remember(context, biometricEnabled) {
-        biometricEnabled &&
-            BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
-            BiometricManager.BIOMETRIC_SUCCESS
+    var biometricErrorMessage by remember { mutableStateOf<String?>(null) }
+    val biometricStatus = remember(context) {
+        BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+    }
+    val canUseBiometric = biometricEnabled && biometricStatus == BiometricManager.BIOMETRIC_SUCCESS
+
+    LaunchedEffect(biometricEnabled, biometricStatus) {
+        biometricErrorMessage = when {
+            !biometricEnabled -> null
+            biometricStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "No biometric enrolled on this device"
+            biometricStatus == BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "No biometric hardware available"
+            biometricStatus == BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "Biometric hardware unavailable right now"
+            else -> null
+        }
     }
 
     BackHandler(enabled = true) {}
@@ -160,7 +170,12 @@ private fun AppLockDialog(
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
-                        showError = false
+                        biometricErrorMessage = errString.toString()
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        biometricErrorMessage = "Biometric did not match. Try again or use PIN."
                     }
                 },
             )
@@ -191,7 +206,9 @@ private fun AppLockDialog(
                 supportingText = if (showError) {
                     { Text("Incorrect PIN") }
                 } else {
-                    null
+                    biometricErrorMessage?.let { errorText ->
+                        { Text(errorText) }
+                    }
                 },
             )
         },
