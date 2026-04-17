@@ -241,7 +241,7 @@ fun SettingsScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Version 1.0.0",
+                        text = "Version 1.1",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
