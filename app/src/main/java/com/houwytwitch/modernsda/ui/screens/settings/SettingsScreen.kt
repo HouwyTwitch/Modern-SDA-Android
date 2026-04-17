@@ -13,9 +13,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.automirrored.outlined.CompareArrows
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Store
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -142,6 +146,91 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Confirmations / background sync section
+            SettingsSectionHeader(title = "Confirmations")
+
+            SettingsCard {
+                ToggleSettingRow(
+                    icon = Icons.Outlined.Sync,
+                    title = "Background Sync",
+                    subtitle = "Periodically check for pending confirmations",
+                    checked = settings.backgroundSyncEnabled,
+                    onCheckedChange = viewModel::setBackgroundSyncEnabled,
+                )
+
+                if (settings.backgroundSyncEnabled) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Sync Interval",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = "${settings.syncIntervalMinutes} min",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Slider(
+                        value = settings.syncIntervalMinutes.toFloat(),
+                        onValueChange = { viewModel.setSyncIntervalMinutes(it.roundToInt()) },
+                        valueRange = 15f..60f,
+                        steps = 2,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        Text("15 min", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text("60 min", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    ToggleSettingRow(
+                        icon = Icons.Outlined.Notifications,
+                        title = "Notify on Pending",
+                        subtitle = "Show notification when confirmations are waiting",
+                        checked = settings.notifyOnPendingConfirmations,
+                        onCheckedChange = viewModel::setNotifyOnPending,
+                    )
+                }
+
+                ToggleSettingRow(
+                    icon = Icons.Outlined.Store,
+                    title = "Auto-confirm Market",
+                    subtitle = "Automatically accept market listing confirmations",
+                    checked = settings.autoConfirmMarket,
+                    onCheckedChange = viewModel::setAutoConfirmMarket,
+                )
+
+                ToggleSettingRow(
+                    icon = Icons.AutoMirrored.Outlined.CompareArrows,
+                    title = "Auto-confirm Trades",
+                    subtitle = "Automatically accept trade offer confirmations",
+                    checked = settings.autoConfirmTrades,
+                    onCheckedChange = viewModel::setAutoConfirmTrades,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // About section
             SettingsSectionHeader(title = "About")
             SettingsCard {
@@ -152,7 +241,7 @@ fun SettingsScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Version 1.0.0",
+                        text = "Version 1.1",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

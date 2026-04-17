@@ -15,8 +15,8 @@ android {
         applicationId = "com.houwytwitch.modernsda"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
@@ -104,4 +104,13 @@ dependencies {
 
     // Serialization (for type-safe navigation)
     implementation(libs.kotlin.serialization.json)
+
+    // CameraX
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+
+    // ML Kit Barcode Scanning
+    implementation(libs.mlkit.barcode)
 }

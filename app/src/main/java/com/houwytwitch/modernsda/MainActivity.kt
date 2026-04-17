@@ -18,16 +18,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.houwytwitch.modernsda.data.model.Account
 import com.houwytwitch.modernsda.ui.navigation.AccountsRoute
 import com.houwytwitch.modernsda.ui.navigation.AppBottomNavigationBar
 import com.houwytwitch.modernsda.ui.navigation.ConfirmationsRoute
+import com.houwytwitch.modernsda.ui.navigation.QrScanRoute
 import com.houwytwitch.modernsda.ui.navigation.SettingsRoute
 import com.houwytwitch.modernsda.ui.screens.accounts.AccountsScreen
 import com.houwytwitch.modernsda.ui.screens.confirmations.ConfirmationsScreen
+import com.houwytwitch.modernsda.ui.screens.qr.QrScanScreen
 import com.houwytwitch.modernsda.ui.screens.settings.SettingsScreen
 import com.houwytwitch.modernsda.ui.screens.settings.SettingsViewModel
 import com.houwytwitch.modernsda.ui.theme.ModernSdaTheme
@@ -57,9 +61,16 @@ private fun MainContent() {
         val navController = rememberNavController()
         var selectedAccount by remember { mutableStateOf<Account?>(null) }
 
+        val currentBackStackEntry by navController.currentBackStackEntryAsState()
+        val isQrScanActive = currentBackStackEntry?.destination?.hasRoute(QrScanRoute::class) == true
+
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            bottomBar = { AppBottomNavigationBar(navController = navController) },
+            bottomBar = {
+                if (!isQrScanActive) {
+                    AppBottomNavigationBar(navController = navController)
+                }
+            },
         ) { innerPadding ->
             NavHost(
                 navController = navController,
@@ -72,6 +83,9 @@ private fun MainContent() {
                     AccountsScreen(
                         onAccountSelected = { account -> selectedAccount = account },
                         copyOnClick = settings.copyOnClick,
+                        onQrScanClick = { steamId ->
+                            navController.navigate(QrScanRoute(steamId))
+                        },
                     )
                 }
                 composable<ConfirmationsRoute> {
@@ -79,6 +93,9 @@ private fun MainContent() {
                 }
                 composable<SettingsRoute> {
                     SettingsScreen()
+                }
+                composable<QrScanRoute> {
+                    QrScanScreen(onBack = { navController.popBackStack() })
                 }
             }
         }
