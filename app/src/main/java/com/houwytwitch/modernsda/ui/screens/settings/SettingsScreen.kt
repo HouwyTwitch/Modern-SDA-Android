@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.CompareArrows
+import androidx.compose.material.icons.automirrored.outlined.CompareArrows
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Notifications
@@ -221,7 +221,7 @@ fun SettingsScreen(
                 )
 
                 ToggleSettingRow(
-                    icon = Icons.Outlined.CompareArrows,
+                    icon = Icons.AutoMirrored.Outlined.CompareArrows,
                     title = "Auto-confirm Trades",
                     subtitle = "Automatically accept trade offer confirmations",
                     checked = settings.autoConfirmTrades,
