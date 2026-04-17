@@ -1,7 +1,6 @@
 package com.houwytwitch.modernsda.di
 
 import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import com.houwytwitch.modernsda.data.db.AccountDao
 import com.houwytwitch.modernsda.domain.steam.AvatarFetcher
 import com.houwytwitch.modernsda.domain.steam.QrLoginService
@@ -29,9 +28,7 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideGson(): Gson = GsonBuilder()
-        .setLenient()
-        .create()
+    fun provideGson(): Gson = Gson()
 
     @Provides
     @Singleton
