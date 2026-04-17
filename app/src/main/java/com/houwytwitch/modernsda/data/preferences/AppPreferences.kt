@@ -22,6 +22,11 @@ data class AppSettings(
     val autoRefreshCode: Boolean = false,
     val refreshIntervalSeconds: Int = 30,
     val copyOnClick: Boolean = true,
+    val backgroundSyncEnabled: Boolean = false,
+    val syncIntervalMinutes: Int = 15,
+    val autoConfirmMarket: Boolean = false,
+    val autoConfirmTrades: Boolean = false,
+    val notifyOnPendingConfirmations: Boolean = true,
 )
 
 @Singleton
@@ -37,6 +42,11 @@ class AppPreferences @Inject constructor(
         val REFRESH_INTERVAL_SECONDS = intPreferencesKey("refresh_interval_seconds")
         val COPY_ON_CLICK = booleanPreferencesKey("copy_on_click")
         val LAST_SELECTED_STEAM_ID = stringPreferencesKey("last_selected_steam_id")
+        val BACKGROUND_SYNC_ENABLED = booleanPreferencesKey("background_sync_enabled")
+        val SYNC_INTERVAL_MINUTES = intPreferencesKey("sync_interval_minutes")
+        val AUTO_CONFIRM_MARKET = booleanPreferencesKey("auto_confirm_market")
+        val AUTO_CONFIRM_TRADES = booleanPreferencesKey("auto_confirm_trades")
+        val NOTIFY_ON_PENDING = booleanPreferencesKey("notify_on_pending_confirmations")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -46,6 +56,11 @@ class AppPreferences @Inject constructor(
             autoRefreshCode = prefs[Keys.AUTO_REFRESH_CODE] ?: false,
             refreshIntervalSeconds = prefs[Keys.REFRESH_INTERVAL_SECONDS] ?: 30,
             copyOnClick = prefs[Keys.COPY_ON_CLICK] ?: true,
+            backgroundSyncEnabled = prefs[Keys.BACKGROUND_SYNC_ENABLED] ?: false,
+            syncIntervalMinutes = prefs[Keys.SYNC_INTERVAL_MINUTES] ?: 15,
+            autoConfirmMarket = prefs[Keys.AUTO_CONFIRM_MARKET] ?: false,
+            autoConfirmTrades = prefs[Keys.AUTO_CONFIRM_TRADES] ?: false,
+            notifyOnPendingConfirmations = prefs[Keys.NOTIFY_ON_PENDING] ?: true,
         )
     }
 
@@ -81,5 +96,25 @@ class AppPreferences @Inject constructor(
                 it.remove(Keys.LAST_SELECTED_STEAM_ID)
             }
         }
+    }
+
+    suspend fun setBackgroundSyncEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.BACKGROUND_SYNC_ENABLED] = enabled }
+    }
+
+    suspend fun setSyncIntervalMinutes(minutes: Int) {
+        dataStore.edit { it[Keys.SYNC_INTERVAL_MINUTES] = minutes.coerceIn(15, 60) }
+    }
+
+    suspend fun setAutoConfirmMarket(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_CONFIRM_MARKET] = enabled }
+    }
+
+    suspend fun setAutoConfirmTrades(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_CONFIRM_TRADES] = enabled }
+    }
+
+    suspend fun setNotifyOnPendingConfirmations(enabled: Boolean) {
+        dataStore.edit { it[Keys.NOTIFY_ON_PENDING] = enabled }
     }
 }

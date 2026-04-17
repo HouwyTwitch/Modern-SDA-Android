@@ -2,7 +2,9 @@ package com.houwytwitch.modernsda.di
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.houwytwitch.modernsda.data.db.AccountDao
 import com.houwytwitch.modernsda.domain.steam.AvatarFetcher
+import com.houwytwitch.modernsda.domain.steam.QrLoginService
 import com.houwytwitch.modernsda.domain.steam.SteamConfirmations
 import com.houwytwitch.modernsda.domain.steam.SteamLogin
 import dagger.Module
@@ -51,4 +53,11 @@ object NetworkModule {
         okHttpClient: OkHttpClient,
         gson: Gson,
     ): SteamLogin = SteamLogin(okHttpClient, gson)
+
+    @Provides
+    @Singleton
+    fun provideQrLoginService(
+        okHttpClient: OkHttpClient,
+        accountDao: AccountDao,
+    ): QrLoginService = QrLoginService(okHttpClient, accountDao)
 }

@@ -19,17 +19,25 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.serialization.Serializable
+import kotlin.reflect.KClass
 
 // Type-safe navigation routes
 @Serializable object AccountsRoute
 @Serializable object ConfirmationsRoute
 @Serializable object SettingsRoute
+@Serializable data class QrScanRoute(val steamId: Long)
 
 data class TopLevelRoute(
     val label: String,
     val route: Any,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
+)
+
+val bottomNavRoutes = setOf(
+    AccountsRoute::class,
+    ConfirmationsRoute::class,
+    SettingsRoute::class,
 )
 
 val topLevelRoutes = listOf(
