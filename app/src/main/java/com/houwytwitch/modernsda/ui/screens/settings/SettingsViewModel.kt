@@ -75,4 +75,12 @@ class SettingsViewModel @Inject constructor(
     fun setNotifyOnPending(enabled: Boolean) {
         viewModelScope.launch { appPreferences.setNotifyOnPendingConfirmations(enabled) }
     }
+
+    fun setPinCode(pinCode: String?) {
+        viewModelScope.launch { appPreferences.setPinCode(pinCode) }
+    }
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setBiometricEnabled(enabled) }
+    }
 }

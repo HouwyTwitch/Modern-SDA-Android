@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.automirrored.outlined.CompareArrows
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
@@ -21,21 +23,31 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Store
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlin.math.roundToInt
@@ -45,6 +57,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsState()
+    var showPinDialog by remember { mutableStateOf(false) }
 
     Scaffold { paddingValues ->
         Column(
@@ -231,6 +244,46 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            SettingsSectionHeader(title = "Security")
+            SettingsCard {
+                ToggleSettingRow(
+                    icon = Icons.Outlined.Lock,
+                    title = "PIN Code",
+                    subtitle = if (settings.pinCode.isNullOrBlank()) {
+                        "Require PIN when opening the app"
+                    } else {
+                        "PIN is enabled for app unlock"
+                    },
+                    checked = !settings.pinCode.isNullOrBlank(),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            showPinDialog = true
+                        } else {
+                            viewModel.setPinCode(null)
+                        }
+                    },
+                )
+                if (!settings.pinCode.isNullOrBlank()) {
+                    Button(
+                        onClick = { showPinDialog = true },
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                    ) {
+                        Text("Change PIN")
+                    }
+                    ToggleSettingRow(
+                        icon = Icons.Outlined.Fingerprint,
+                        title = "Biometric Unlock",
+                        subtitle = "Use fingerprint/face before PIN fallback",
+                        checked = settings.biometricEnabled,
+                        onCheckedChange = viewModel::setBiometricEnabled,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // About section
             SettingsSectionHeader(title = "About")
             SettingsCard {
@@ -241,7 +294,7 @@ fun SettingsScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Version 1.1",
+                        text = "Version 1.1.1",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -256,6 +309,17 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(88.dp))
         }
+    }
+
+    if (showPinDialog) {
+        PinCodeDialog(
+            currentPin = settings.pinCode,
+            onDismiss = { showPinDialog = false },
+            onSave = { pin ->
+                viewModel.setPinCode(pin)
+                showPinDialog = false
+            },
+        )
     }
 }
 
@@ -319,4 +383,40 @@ private fun ToggleSettingRow(
             onCheckedChange = onCheckedChange,
         )
     }
+}
+
+@Composable
+private fun PinCodeDialog(
+    currentPin: String?,
+    onDismiss: () -> Unit,
+    onSave: (String?) -> Unit,
+) {
+    var pinInput by remember { mutableStateOf(currentPin.orEmpty()) }
+    val isValid = pinInput.length in 4..8 && pinInput.all { it.isDigit() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (currentPin.isNullOrBlank()) "Set PIN Code" else "Update PIN Code") },
+        text = {
+            OutlinedTextField(
+                value = pinInput,
+                onValueChange = { value ->
+                    pinInput = value.filter { it.isDigit() }.take(8)
+                },
+                label = { Text("PIN (4-8 digits)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                visualTransformation = PasswordVisualTransformation(),
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(pinInput) },
+                enabled = isValid,
+            ) { Text("Save") }
+        },
+    )
 }

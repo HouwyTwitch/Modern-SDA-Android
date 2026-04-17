@@ -27,6 +27,8 @@ data class AppSettings(
     val autoConfirmMarket: Boolean = false,
     val autoConfirmTrades: Boolean = false,
     val notifyOnPendingConfirmations: Boolean = true,
+    val pinCode: String? = null,
+    val biometricEnabled: Boolean = false,
 )
 
 @Singleton
@@ -47,6 +49,8 @@ class AppPreferences @Inject constructor(
         val AUTO_CONFIRM_MARKET = booleanPreferencesKey("auto_confirm_market")
         val AUTO_CONFIRM_TRADES = booleanPreferencesKey("auto_confirm_trades")
         val NOTIFY_ON_PENDING = booleanPreferencesKey("notify_on_pending_confirmations")
+        val PIN_CODE = stringPreferencesKey("pin_code")
+        val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -61,6 +65,8 @@ class AppPreferences @Inject constructor(
             autoConfirmMarket = prefs[Keys.AUTO_CONFIRM_MARKET] ?: false,
             autoConfirmTrades = prefs[Keys.AUTO_CONFIRM_TRADES] ?: false,
             notifyOnPendingConfirmations = prefs[Keys.NOTIFY_ON_PENDING] ?: true,
+            pinCode = prefs[Keys.PIN_CODE],
+            biometricEnabled = prefs[Keys.BIOMETRIC_ENABLED] ?: false,
         )
     }
 
@@ -116,5 +122,23 @@ class AppPreferences @Inject constructor(
 
     suspend fun setNotifyOnPendingConfirmations(enabled: Boolean) {
         dataStore.edit { it[Keys.NOTIFY_ON_PENDING] = enabled }
+    }
+
+    suspend fun setPinCode(pinCode: String?) {
+        dataStore.edit {
+            if (pinCode.isNullOrBlank()) {
+                it.remove(Keys.PIN_CODE)
+                it[Keys.BIOMETRIC_ENABLED] = false
+            } else {
+                it[Keys.PIN_CODE] = pinCode
+            }
+        }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            val hasPinCode = !prefs[Keys.PIN_CODE].isNullOrBlank()
+            prefs[Keys.BIOMETRIC_ENABLED] = enabled && hasPinCode
+        }
     }
 }
