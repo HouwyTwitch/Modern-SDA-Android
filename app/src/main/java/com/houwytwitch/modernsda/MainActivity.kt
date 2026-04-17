@@ -1,6 +1,8 @@
 package com.houwytwitch.modernsda
 
 import android.os.Bundle
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -137,7 +139,7 @@ private fun AppLockDialog(
     var biometricAttempted by remember { mutableStateOf(false) }
     val canUseBiometric = remember(context, biometricEnabled) {
         biometricEnabled &&
-            BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+            BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
             BiometricManager.BIOMETRIC_SUCCESS
     }
 
@@ -146,7 +148,7 @@ private fun AppLockDialog(
     LaunchedEffect(canUseBiometric, biometricAttempted) {
         if (canUseBiometric && !biometricAttempted) {
             biometricAttempted = true
-            val activity = context as? FragmentActivity ?: return@LaunchedEffect
+            val activity = context.findFragmentActivity() ?: return@LaunchedEffect
             val executor = ContextCompat.getMainExecutor(context)
             val prompt = BiometricPrompt(
                 activity,
@@ -155,11 +157,17 @@ private fun AppLockDialog(
                     override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                         onUnlock()
                     }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        showError = false
+                    }
                 },
             )
             val info = BiometricPrompt.PromptInfo.Builder()
                 .setTitle("Unlock Modern SDA")
                 .setSubtitle("Authenticate to continue")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
                 .setNegativeButtonText("Use PIN")
                 .build()
             prompt.authenticate(info)
@@ -204,4 +212,10 @@ private fun AppLockDialog(
             }
         },
     )
+}
+
+private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
+    is FragmentActivity -> this
+    is ContextWrapper -> baseContext.findFragmentActivity()
+    else -> null
 }
