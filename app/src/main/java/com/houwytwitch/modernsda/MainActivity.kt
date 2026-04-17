@@ -140,7 +140,7 @@ private fun AppLockDialog(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var pinInput by remember { mutableStateOf("") }
-    var showError by remember { mutableStateOf(false) }
+    var pinErrorMessage by remember { mutableStateOf<String?>(null) }
     var biometricAttempted by remember { mutableStateOf(false) }
     var biometricRequested by remember { mutableStateOf(false) }
     var biometricErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -161,6 +161,12 @@ private fun AppLockDialog(
 
     BackHandler(enabled = true) {}
 
+    LaunchedEffect(canUseBiometric, biometricAttempted) {
+        if (canUseBiometric && !biometricAttempted) {
+            biometricRequested = true
+        }
+    }
+
     DisposableEffect(lifecycleOwner, canUseBiometric, biometricAttempted) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME && canUseBiometric && !biometricAttempted) {
@@ -173,6 +179,9 @@ private fun AppLockDialog(
 
     LaunchedEffect(canUseBiometric, biometricRequested) {
         if (canUseBiometric && biometricRequested) {
+            if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                return@LaunchedEffect
+            }
             biometricRequested = false
             biometricAttempted = true
             val activity = context.findFragmentActivity() ?: return@LaunchedEffect
@@ -214,18 +223,14 @@ private fun AppLockDialog(
                 value = pinInput,
                 onValueChange = {
                     pinInput = it.filter(Char::isDigit).take(8)
-                    showError = false
+                    pinErrorMessage = null
                 },
                 label = { Text("Enter PIN") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                supportingText = if (showError) {
-                    { Text("Incorrect PIN") }
-                } else {
-                    biometricErrorMessage?.let { errorText ->
-                        { Text(errorText) }
-                    }
+                supportingText = (pinErrorMessage ?: biometricErrorMessage)?.let { errorText ->
+                    { Text(errorText) }
                 },
             )
         },
@@ -235,7 +240,7 @@ private fun AppLockDialog(
                     if (!pinCode.isNullOrBlank() && pinInput == pinCode) {
                         onUnlock()
                     } else {
-                        showError = true
+                        pinErrorMessage = "Incorrect PIN"
                     }
                 },
             ) { Text("Unlock") }
