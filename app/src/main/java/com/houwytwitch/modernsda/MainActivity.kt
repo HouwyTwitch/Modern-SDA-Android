@@ -21,6 +21,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +40,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.houwytwitch.modernsda.data.model.Account
 import com.houwytwitch.modernsda.ui.navigation.AccountsRoute
 import com.houwytwitch.modernsda.ui.navigation.AppBottomNavigationBar
@@ -134,9 +138,11 @@ private fun AppLockDialog(
     onUnlock: () -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var pinInput by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var biometricAttempted by remember { mutableStateOf(false) }
+    var biometricRequested by remember { mutableStateOf(false) }
     var biometricErrorMessage by remember { mutableStateOf<String?>(null) }
     val biometricStatus = remember(context) {
         BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK)
@@ -155,8 +161,19 @@ private fun AppLockDialog(
 
     BackHandler(enabled = true) {}
 
-    LaunchedEffect(canUseBiometric, biometricAttempted) {
-        if (canUseBiometric && !biometricAttempted) {
+    DisposableEffect(lifecycleOwner, canUseBiometric, biometricAttempted) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && canUseBiometric && !biometricAttempted) {
+                biometricRequested = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(canUseBiometric, biometricRequested) {
+        if (canUseBiometric && biometricRequested) {
+            biometricRequested = false
             biometricAttempted = true
             val activity = context.findFragmentActivity() ?: return@LaunchedEffect
             val executor = ContextCompat.getMainExecutor(context)
@@ -225,7 +242,7 @@ private fun AppLockDialog(
         },
         dismissButton = {
             if (canUseBiometric) {
-                TextButton(onClick = { biometricAttempted = false }) { Text("Use Biometric") }
+                TextButton(onClick = { biometricRequested = true }) { Text("Use Biometric") }
             }
         },
     )
