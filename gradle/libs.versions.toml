@@ -20,6 +20,7 @@ splashscreen = "1.0.1"
 work = "2.10.0"
 camerax = "1.4.1"
 mlkit-barcode = "17.3.0"
+biometric = "1.2.0-alpha05"
 
 [libraries]
 # AndroidX
@@ -84,6 +85,9 @@ camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = 
 
 # ML Kit
 mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkit-barcode" }
+
+# Biometric
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

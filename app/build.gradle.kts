@@ -113,4 +113,7 @@ dependencies {
 
     // ML Kit Barcode Scanning
     implementation(libs.mlkit.barcode)
+
+    // Biometric authentication
+    implementation(libs.androidx.biometric)
 }

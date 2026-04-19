@@ -4,23 +4,31 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.houwytwitch.modernsda.data.preferences.AppPreferences
 import com.houwytwitch.modernsda.data.preferences.AppSettings
+import com.houwytwitch.modernsda.data.security.BiometricAuthenticator
+import com.houwytwitch.modernsda.data.security.PinHasher
 import com.houwytwitch.modernsda.service.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val syncScheduler: SyncScheduler,
+    private val pinHasher: PinHasher,
+    private val biometricAuthenticator: BiometricAuthenticator,
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> = appPreferences.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    fun isBiometricAvailable(): Boolean = biometricAuthenticator.isUsable()
 
     fun setDarkTheme(enabled: Boolean) {
         viewModelScope.launch { appPreferences.setDarkTheme(enabled) }
@@ -74,5 +82,24 @@ class SettingsViewModel @Inject constructor(
 
     fun setNotifyOnPending(enabled: Boolean) {
         viewModelScope.launch { appPreferences.setNotifyOnPendingConfirmations(enabled) }
+    }
+
+    fun savePin(pin: String) {
+        viewModelScope.launch {
+            val hashed = withContext(Dispatchers.Default) { pinHasher.hashPin(pin) }
+            appPreferences.savePinCredentials(
+                hash = hashed.hash,
+                salt = hashed.salt,
+                length = pin.length,
+            )
+        }
+    }
+
+    fun disablePin() {
+        viewModelScope.launch { appPreferences.clearPinCredentials() }
+    }
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setBiometricEnabled(enabled) }
     }
 }
