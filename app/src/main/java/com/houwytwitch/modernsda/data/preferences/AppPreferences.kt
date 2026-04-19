@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,6 +28,15 @@ data class AppSettings(
     val autoConfirmMarket: Boolean = false,
     val autoConfirmTrades: Boolean = false,
     val notifyOnPendingConfirmations: Boolean = true,
+    val pinEnabled: Boolean = false,
+    val biometricEnabled: Boolean = false,
+    val pinLength: Int = 4,
+)
+
+data class PinCredentials(
+    val hash: String,
+    val salt: String,
+    val length: Int,
 )
 
 @Singleton
@@ -47,6 +57,11 @@ class AppPreferences @Inject constructor(
         val AUTO_CONFIRM_MARKET = booleanPreferencesKey("auto_confirm_market")
         val AUTO_CONFIRM_TRADES = booleanPreferencesKey("auto_confirm_trades")
         val NOTIFY_ON_PENDING = booleanPreferencesKey("notify_on_pending_confirmations")
+        val PIN_ENABLED = booleanPreferencesKey("pin_enabled")
+        val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        val PIN_HASH = stringPreferencesKey("pin_hash")
+        val PIN_SALT = stringPreferencesKey("pin_salt")
+        val PIN_LENGTH = intPreferencesKey("pin_length")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -61,6 +76,9 @@ class AppPreferences @Inject constructor(
             autoConfirmMarket = prefs[Keys.AUTO_CONFIRM_MARKET] ?: false,
             autoConfirmTrades = prefs[Keys.AUTO_CONFIRM_TRADES] ?: false,
             notifyOnPendingConfirmations = prefs[Keys.NOTIFY_ON_PENDING] ?: true,
+            pinEnabled = prefs[Keys.PIN_ENABLED] ?: false,
+            biometricEnabled = prefs[Keys.BIOMETRIC_ENABLED] ?: false,
+            pinLength = prefs[Keys.PIN_LENGTH] ?: 4,
         )
     }
 
@@ -116,5 +134,36 @@ class AppPreferences @Inject constructor(
 
     suspend fun setNotifyOnPendingConfirmations(enabled: Boolean) {
         dataStore.edit { it[Keys.NOTIFY_ON_PENDING] = enabled }
+    }
+
+    suspend fun savePinCredentials(hash: String, salt: String, length: Int) {
+        dataStore.edit {
+            it[Keys.PIN_HASH] = hash
+            it[Keys.PIN_SALT] = salt
+            it[Keys.PIN_LENGTH] = length
+            it[Keys.PIN_ENABLED] = true
+        }
+    }
+
+    suspend fun clearPinCredentials() {
+        dataStore.edit {
+            it.remove(Keys.PIN_HASH)
+            it.remove(Keys.PIN_SALT)
+            it.remove(Keys.PIN_LENGTH)
+            it[Keys.PIN_ENABLED] = false
+            it[Keys.BIOMETRIC_ENABLED] = false
+        }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.BIOMETRIC_ENABLED] = enabled }
+    }
+
+    suspend fun getPinCredentials(): PinCredentials? {
+        val prefs = dataStore.data.first()
+        val hash = prefs[Keys.PIN_HASH] ?: return null
+        val salt = prefs[Keys.PIN_SALT] ?: return null
+        val length = prefs[Keys.PIN_LENGTH] ?: return null
+        return PinCredentials(hash = hash, salt = salt, length = length)
     }
 }
