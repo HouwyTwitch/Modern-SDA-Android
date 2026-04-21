@@ -145,7 +145,7 @@ fun AccountsScreen(
                 exit = fadeOut(),
             ) {
                 Column {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     TotpCodeDisplay(
                         code = uiState.currentCode,
                         timeRemaining = uiState.timeRemaining,
